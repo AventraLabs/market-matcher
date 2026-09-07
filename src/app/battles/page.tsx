@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { getAllBattles } from "@/lib/battle";
 
+// Always live data — without this, Next prerenders it once at build time
+// (no dynamic API is used otherwise) and it would never show a battle
+// created after the last deploy.
+export const dynamic = "force-dynamic";
+
 function BrandThumb({ brand }: { brand: { name: string; logoUrl: string | null } }) {
   return brand.logoUrl ? (
     // eslint-disable-next-line @next/next/no-img-element -- user-uploaded, arbitrary source
