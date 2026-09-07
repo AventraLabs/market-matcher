@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { battles, brands, type Battle } from "@/db/schema";
 
@@ -12,6 +12,27 @@ type BattleBrand = {
 };
 
 export type BattleWithBrands = Battle & { brandA: BattleBrand; brandB: BattleBrand };
+
+/**
+ * The video to actually show/count for each side. Battles created before
+ * Phase 7 have no per-battle video (brandAVideoUrl/brandBVideoUrl are
+ * null) and relied on each brand's profile showcase video instead — this
+ * keeps those old rows working without a backfill migration.
+ *
+ * The fallback only applies to those genuinely old rows — detected by
+ * `productionDeadline` being null on a 'scheduled' battle, which can only
+ * happen on a pre-Phase-7 row, since respondToChallenge always sets it
+ * now. Without this guard, a brand that already has a Phase 3 profile
+ * video would look like it had already submitted its side of a brand-new
+ * battle it hasn't touched yet, skipping "awaiting_videos" entirely.
+ */
+export function resolveBattleVideos(battle: BattleWithBrands): { videoUrlA: string | null; videoUrlB: string | null } {
+  const isLegacyRow = battle.mode === "scheduled" && battle.productionDeadline === null;
+  if (isLegacyRow) {
+    return { videoUrlA: battle.brandA.videoUrl, videoUrlB: battle.brandB.videoUrl };
+  }
+  return { videoUrlA: battle.brandAVideoUrl, videoUrlB: battle.brandBVideoUrl };
+}
 
 const brandCols = {
   id: brands.id,
@@ -51,4 +72,21 @@ export async function getBattleById(id: string): Promise<BattleWithBrands | null
 export async function getBattlesForBrand(brandId: string): Promise<BattleWithBrands[]> {
   const all = await getAllBattles();
   return all.filter((b) => b.brandAId === brandId || b.brandBId === brandId);
+}
+
+/**
+ * Is there already an 'open' battle where `challengerBrandId` countered
+ * `targetBrandId`? Used to stop the same brand from countering the same
+ * target over and over — one open battle between a given pair at a time,
+ * same spirit as getLivePendingChallengeBetween for the scheduled flow.
+ */
+export async function getExistingOpenBattle(targetBrandId: string, challengerBrandId: string) {
+  const [row] = await db
+    .select()
+    .from(battles)
+    .where(
+      and(eq(battles.mode, "open"), eq(battles.brandAId, targetBrandId), eq(battles.brandBId, challengerBrandId)),
+    )
+    .limit(1);
+  return row ?? null;
 }

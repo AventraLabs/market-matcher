@@ -2,13 +2,16 @@ import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { brands } from "@/db/schema";
+import Link from "next/link";
 import { VideoPlayer } from "@/components/brand/video-player";
 import { ChallengeButton } from "@/components/challenge/challenge-button";
 import { FollowButton } from "@/components/brand/follow-button";
+import { CounterForm } from "@/components/battle/counter-form";
 import { getOptionalUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
 import { getLivePendingChallengeBetween } from "@/lib/challenge";
 import { getFollowerCount, isFollowing } from "@/lib/follow";
+import { getExistingOpenBattle } from "@/lib/battle";
 
 // Note: this page already reads the session (getOptionalUser -> auth(),
 // which touches cookies), so Next treats it as dynamic automatically —
@@ -31,10 +34,11 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
   const viewer = await getOptionalUser();
   const viewerBrand = viewer ? await getBrandForUser(viewer.id) : null;
   const isOwnBrand = viewerBrand?.id === brand.id;
-  const [livePending, followerCount, viewerFollows] = await Promise.all([
+  const [livePending, followerCount, viewerFollows, existingOpenBattle] = await Promise.all([
     viewerBrand && !isOwnBrand ? getLivePendingChallengeBetween(viewerBrand.id, brand.id) : null,
     getFollowerCount(brand.id),
     viewer && !isOwnBrand ? isFollowing(viewer.id, brand.id) : false,
+    viewerBrand && !isOwnBrand ? getExistingOpenBattle(brand.id, viewerBrand.id) : null,
   ]);
 
   return (
@@ -85,6 +89,21 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
         {brand.videoUrl && (
           <div className="mx-auto mt-6 max-w-[280px]">
             <VideoPlayer src={brand.videoUrl} />
+          </div>
+        )}
+
+        {brand.videoUrl && viewerBrand && !isOwnBrand && (
+          <div className="mt-4 text-center">
+            {existingOpenBattle ? (
+              <Link
+                href={`/battles/${existingOpenBattle.id}`}
+                className="text-sm text-orange-500 hover:underline"
+              >
+                Du hast diese Marke bereits gekontert — Battle ansehen →
+              </Link>
+            ) : (
+              <CounterForm targetBrandId={brand.id} />
+            )}
           </div>
         )}
 

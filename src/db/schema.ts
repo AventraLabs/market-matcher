@@ -123,18 +123,39 @@ export const challenges = pgTable(
 export type Challenge = typeof challenges.$inferSelect;
 export type NewChallenge = typeof challenges.$inferInsert;
 
-// Phase 5: battles. Created automatically the moment a challenge is
-// accepted (see respondToChallenge in src/app/actions/challenge.ts) — a
-// battle is just "this accepted challenge, viewed as a head-to-head page".
-// status stays 'active' through Phase 5; Phase 6 (voting) is what will
-// eventually flip it to 'finished'.
+// Phase 5/7: battles. Two ways a battle gets created (see
+// src/lib/battle-format.ts for the shared constants and
+// src/lib/battle-stage.ts for how the fields below combine into a single
+// computed "stage"):
+//
+// 1. 'scheduled' — a challenge gets accepted (src/app/actions/challenge.ts).
+//    challengeId is set, both video columns start empty, productionDeadline
+//    is 2 weeks out. Nothing is visible/votable until BOTH brands upload
+//    their own video for THIS battle — that's what "verdeckt" means: nobody
+//    can see (or copy) the other side's video before posting their own.
+// 2. 'open' — a brand's already-public showcase video (brands.videoUrl)
+//    gets countered by another brand, no permission needed (Phase 7 —
+//    src/app/actions/battle.ts, counterWithVideo). challengeId is null,
+//    both video columns are filled at creation (the original video is
+//    copied in, not live-referenced, so it can't shift under an ongoing
+//    battle), productionDeadline is null since there's nothing to wait for.
+//
+// Either way, the moment both video columns are filled, votingEndsAt gets
+// set (now + VOTING_WINDOW_MS) — that's the actual "battle is live, vote
+// now" moment, and it's what the follower notification fires on (see
+// activateBattleIfBothSidesReady in src/lib/battle-stage.ts), not challenge
+// acceptance or the open-mode counter itself.
+//
+// status/winner/resolution are NOT stored — src/lib/battle-stage.ts derives
+// "awaiting_videos" / "voting" / "finished" (+ winner, +
+// walkover-vs-voted-vs-no-show) from these timestamps at read time, same
+// philosophy as challenges' effectiveStatus(). The old `status` column
+// stays for backward compatibility but is otherwise unused.
 export const battles = pgTable(
   "battles",
   {
     id: uuid("id").primaryKey().defaultRandom(),
-    challengeId: uuid("challenge_id")
-      .notNull()
-      .references(() => challenges.id, { onDelete: "cascade" }),
+    challengeId: uuid("challenge_id").references(() => challenges.id, { onDelete: "cascade" }),
     brandAId: uuid("brand_a_id")
       .notNull()
       .references(() => brands.id, { onDelete: "cascade" }),
@@ -142,6 +163,23 @@ export const battles = pgTable(
       .notNull()
       .references(() => brands.id, { onDelete: "cascade" }),
     status: text("status").notNull().default("active"),
+    // 'scheduled' | 'open'
+    mode: text("mode").notNull().default("scheduled"),
+    // Free text for now — there's only one category platform-wide today
+    // (see PITCH_CATEGORY in src/lib/battle-format.ts), stored per-row so a
+    // future "pick a category" feature doesn't need a migration. The
+    // column-level default (kept in sync with PITCH_CATEGORY by hand, since
+    // schema.ts can't import from a module that itself has no DB
+    // dependency without risking a circular import) exists only so this
+    // migration doesn't fail on the rows that already exist — every actual
+    // insert always passes it explicitly.
+    category: text("category").notNull().default("Verkaufe dein Produkt oder deine Leistung in 15 Sekunden"),
+    brandAVideoUrl: text("brand_a_video_url"),
+    brandBVideoUrl: text("brand_b_video_url"),
+    brandASubmittedAt: timestamp("brand_a_submitted_at", { withTimezone: true }),
+    brandBSubmittedAt: timestamp("brand_b_submitted_at", { withTimezone: true }),
+    productionDeadline: timestamp("production_deadline", { withTimezone: true }),
+    votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => [uniqueIndex("battles_challenge_id_unique_idx").on(table.challengeId)],

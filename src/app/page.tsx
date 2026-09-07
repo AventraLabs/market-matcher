@@ -47,7 +47,7 @@ export default async function Home() {
       </div>
 
       <p className="mt-16 text-xs text-zinc-600">
-        Phase 1-6 — Accounts, Marken, Video, Challenges, Battle, Voting.
+        Phase 1-7 — Accounts, Marken, Video, Challenges, Battle, Voting, Kontern.
       </p>
     </div>
   );

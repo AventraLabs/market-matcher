@@ -50,6 +50,13 @@
       "when": 1788787818308,
       "tag": "0006_daily_sauron",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788790038597,
+      "tag": "0007_public_ben_parker",
+      "breakpoints": true
     }
   ]
 }

@@ -4,7 +4,7 @@
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
 (video), Phase 4 (challenges), Phase 5 (battle + follow/notify refinements), Phase 6
-(voting).**
+(voting), Phase 7 (per-battle video, hidden results, open counters).**
 
 **Live:** https://market-matcher-neon.vercel.app
 
@@ -64,6 +64,16 @@ That's enough to test the whole flow solo.
 - **votes** (Phase 6) — battleId, userId, votedForBrandId, createdAt. Unique index
   on (battleId, userId) — the real enforcement of one vote per user per battle; the
   app also checks first for a friendlier error message.
+- **battles** got extended in Phase 7 rather than getting a new table: `mode`
+  ('scheduled' | 'open'), `category` (currently always the one constant format —
+  see PITCH_CATEGORY in `src/lib/battle-format.ts`), `brandAVideoUrl` /
+  `brandBVideoUrl` (per-battle video, replacing the old reuse of the brand's
+  profile showcase video), `brandASubmittedAt` / `brandBSubmittedAt`,
+  `productionDeadline` (scheduled mode only), `votingEndsAt`. `challengeId` is now
+  nullable — an 'open' battle has no challenge behind it. Nothing about a battle's
+  current stage (awaiting videos / voting / finished) or winner is stored — it's
+  computed at read time from these fields, same philosophy as challenges'
+  effectiveStatus(). See `src/lib/battle-stage.ts`.
 
 More tables (Vote, ...) get added in later phases, on top of this.
 
@@ -190,8 +200,52 @@ More tables (Vote, ...) get added in later phases, on top of this.
   with no 👑 on either side (not a crash or a false "leader"), and a single vote
   flips the 👑 correctly once the tie breaks.
 
-Deliberately out of scope so far: any ranking/ELO across battles, a voting deadline
-(see above), and per-battle dedicated video (see the Phase 5.1 challenge-window note).
+**Phase 7 — per-battle video, hidden results, open counters:**
+
+Direct follow-up to product feedback after Phase 6 — three changes, all in
+`src/lib/battle-format.ts`, `src/lib/battle-stage.ts`, `src/app/actions/battle.ts`:
+
+- **Real per-battle video, verdeckt.** A 'scheduled' battle (from an accepted
+  challenge) no longer reuses each brand's general profile video — it starts with
+  neither video, `productionDeadline` 2 weeks out, and is invisible/unvotable
+  (`awaiting_videos` stage) until **both** brands have uploaded their own video for
+  *this* battle via `uploadBattleVideo`. Neither side can see or react to the
+  other's video before posting their own. If the deadline passes with only one
+  side in, that side wins by walkover; if neither delivered, the battle is simply
+  never contested (no winner) — no separate "cancelled" state needed, both are
+  just computed outcomes of `getBattleStage()`.
+- **Results hidden until voting closes.** The moment both videos are in,
+  `votingEndsAt` is set (now + `VOTING_WINDOW_MS`, 1 week) and voting opens — but
+  `VotePanel` only shows the total vote count during that week, never the split or
+  a leader. This is deliberate: showing the live split risks a bandwagon effect
+  (people stop voting for whoever's already behind), which defeats the point of a
+  real week-long contest. The total count still shows for FOMO/social proof
+  ("340 Stimmen abgegeben"). The split, the 👑, and the winner only appear once
+  `votingEndsAt` has passed.
+- **Open counters — no permission needed.** Any brand can react to another
+  brand's public showcase video with their own, no challenge/accept step —
+  `counterWithVideo` in `src/app/actions/battle.ts`, triggered by a "⚔️ Kontern"
+  button on `/brands/[slug]`. This exists specifically so a brand nobody has
+  challenged (a new startup, say) isn't stuck waiting to be picked — it can jump
+  into a battle on its own initiative, the same way anyone can duet/stitch a
+  TikTok without asking. The countered video is copied into the new battle at the
+  moment of countering (not live-referenced), so it can't shift under an ongoing
+  battle if the original brand later replaces their profile video. Both videos
+  exist the instant the battle is created, so an 'open' battle skips
+  `awaiting_videos` entirely and goes straight to `voting`.
+- The "battle is live, vote now" follower notification (from Phase 5.1) now fires
+  when both videos actually land — `activateBattleIfBothSidesReady()` — not at
+  challenge-acceptance, since acceptance no longer means anything is watchable yet.
+- **Known rough edge:** battles created before this phase have no
+  `productionDeadline`/`votingEndsAt` and fall back to each brand's profile video
+  (`resolveBattleVideos()` in `src/lib/battle.ts`) so they don't just break — but
+  since nothing ever sets `votingEndsAt` for them, they stay in a perpetually-open
+  "voting" stage (never reaching a revealed result) rather than being backfilled.
+  Harmless for the handful of test battles that predate this migration; not a
+  concern for anything created from here on.
+
+Deliberately out of scope: any ranking/ELO across battles, and a category picker
+(there's one fixed category for now — see `PITCH_CATEGORY`).
 
 ## 4. The two-real-inboxes test
 
