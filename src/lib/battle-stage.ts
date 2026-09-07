@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { battles, brands, notifications, type NewNotification } from "@/db/schema";
 import { getFollowerUserIds } from "@/lib/follow";
+import { getReminderUserIds } from "@/lib/reminder";
 import { VOTING_WINDOW_MS } from "@/lib/battle-format";
 
 export type BattleStage =
@@ -90,9 +91,10 @@ async function notifyFollowersOfLiveBattle(battleId: string, brandAId: string, b
   const brandAName = brandARows[0]?.name ?? "Eine Marke";
   const brandBName = brandBRows[0]?.name ?? "eine Marke";
 
-  const [brandAFollowers, brandBFollowers] = await Promise.all([
+  const [brandAFollowers, brandBFollowers, reminderUserIds] = await Promise.all([
     getFollowerUserIds(brandAId),
     getFollowerUserIds(brandBId),
+    getReminderUserIds(battleId),
   ]);
 
   const rows: NewNotification[] = [
@@ -107,6 +109,20 @@ async function notifyFollowersOfLiveBattle(battleId: string, brandAId: string, b
       battleId,
     })),
   ];
+
+  // Phase 10: anyone who set a reminder on this specific Pitch (from the
+  // "kommt bald" list, /pitches) also gets notified the moment it goes
+  // live — but not twice if they're already covered by a follow above.
+  const alreadyNotified = new Set([...brandAFollowers, ...brandBFollowers]);
+  for (const userId of reminderUserIds) {
+    if (alreadyNotified.has(userId)) continue;
+    rows.push({
+      userId,
+      message: `🔔 Dein vorgemerkter Pitch ist live: ${brandAName} vs. ${brandBName} — jetzt ansehen!`,
+      battleId,
+    });
+  }
+
   if (rows.length > 0) {
     await db.insert(notifications).values(rows);
   }

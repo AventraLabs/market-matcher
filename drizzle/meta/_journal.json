@@ -71,6 +71,13 @@
       "when": 1788805576484,
       "tag": "0009_needy_the_renegades",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1788812149265,
+      "tag": "0010_mixed_pestilence",
+      "breakpoints": true
     }
   ]
 }

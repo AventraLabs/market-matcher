@@ -307,3 +307,27 @@ export const likes = pgTable(
 
 export type Like = typeof likes.$inferSelect;
 export type NewLike = typeof likes.$inferInsert;
+
+// Phase 10: battle reminders. "Erinnere mich" on an upcoming (not-yet-live)
+// Pitch in the reframed /pitches list — deliberately separate from
+// `follows`: a reminder is set on one specific matchup, not on a brand, so
+// it also works for a Pitch between two brands you don't otherwise follow.
+// The moment a battle goes live (activateBattleIfBothSidesReady), everyone
+// who set a reminder gets a notification too — see battle-stage.ts.
+export const battleReminders = pgTable(
+  "battle_reminders",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    battleId: uuid("battle_id")
+      .notNull()
+      .references(() => battles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("battle_reminders_battle_user_unique_idx").on(table.battleId, table.userId)],
+);
+
+export type BattleReminder = typeof battleReminders.$inferSelect;
+export type NewBattleReminder = typeof battleReminders.$inferInsert;

@@ -1,13 +1,11 @@
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { getBattleById, resolveBattleVideos } from "@/lib/battle";
 import { getBattleStage } from "@/lib/battle-stage";
-import { BattleViewer } from "@/components/battle/battle-viewer";
-import { VotePanel } from "@/components/battle/vote-panel";
 import { BattleVideoUploadForm } from "@/components/battle/battle-video-upload-form";
 import { CommentSection } from "@/components/battle/comment-section";
 import { getOptionalUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
-import { getUserVote, getVoteTally } from "@/lib/vote";
+import { getVoteTally } from "@/lib/vote";
 import { getCommentsForBattle } from "@/lib/comment";
 
 function timeLeftLabel(date: Date): string {
@@ -16,6 +14,12 @@ function timeLeftLabel(date: Date): string {
   return `${Math.max(1, Math.ceil(hoursLeft))}h`;
 }
 
+// Phase 10: this page is only the "not live yet" waiting room now — the
+// upload form for your own brand, and a place comments can start before
+// there's even a video to react to (unchanged from Phase 8). The moment a
+// Pitch is actually watchable (both videos in), it only exists in the Feed
+// — see FeedDuelCard — so this redirects there instead of maintaining a
+// second, separate way to watch/vote on the same Duell.
 export default async function PitchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const battle = await getBattleById(id);
@@ -24,10 +28,7 @@ export default async function PitchPage({ params }: { params: Promise<{ id: stri
   const { videoUrlA, videoUrlB } = resolveBattleVideos(battle);
   const viewer = await getOptionalUser();
   const viewerBrand = viewer ? await getBrandForUser(viewer.id) : null;
-  const [tally, comments] = await Promise.all([
-    getVoteTally(battle.id, battle.brandAId, battle.brandBId),
-    getCommentsForBattle(battle.id),
-  ]);
+  const tally = await getVoteTally(battle.id, battle.brandAId, battle.brandBId);
 
   const stage = getBattleStage(
     {
@@ -41,13 +42,13 @@ export default async function PitchPage({ params }: { params: Promise<{ id: stri
     tally,
   );
 
-  const userVote = viewer ? await getUserVote(battle.id, viewer.id) : null;
-  const canVote = Boolean(viewer) && viewerBrand?.id !== battle.brandAId && viewerBrand?.id !== battle.brandBId;
+  if (stage.stage === "voting" || (stage.stage === "finished" && stage.resolution === "voted")) {
+    redirect(`/?battle=${battle.id}`);
+  }
+
   const isOwnBrandA = viewerBrand?.id === battle.brandAId;
   const isOwnBrandB = viewerBrand?.id === battle.brandBId;
-
-  const brandAForViewer = { ...battle.brandA, videoUrl: videoUrlA };
-  const brandBForViewer = { ...battle.brandB, videoUrl: videoUrlB };
+  const comments = await getCommentsForBattle(battle.id);
 
   return (
     <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-16">
@@ -79,54 +80,22 @@ export default async function PitchPage({ params }: { params: Promise<{ id: stri
         </div>
       )}
 
-      {stage.stage === "voting" && (
-        <>
-          <BattleViewer brandA={brandAForViewer} brandB={brandBForViewer} />
-          <VotePanel
-            battleId={battle.id}
-            brandA={battle.brandA}
-            brandB={battle.brandB}
-            tally={tally}
-            userVote={userVote}
-            canVote={canVote}
-            isLoggedIn={Boolean(viewer)}
-            revealSplit={false}
-            votingEndsAt={stage.endsAt}
-          />
-        </>
+      {/* stage.stage === "finished" here only ever means walkover or no_show
+          — a "voted" finish already redirected above. Nothing to watch, so
+          just the outcome. */}
+      {stage.stage === "finished" && stage.resolution === "walkover" && (
+        <p className="mx-auto mt-6 max-w-[380px] rounded-xl border border-zinc-800 p-4 text-center text-sm text-zinc-400">
+          🏆 Sieg durch Nichtantritt für{" "}
+          <span className="font-semibold text-orange-400">
+            {stage.winnerBrandId === battle.brandAId ? battle.brandA.name : battle.brandB.name}
+          </span>{" "}
+          — die Gegenseite hat ihr Video nicht rechtzeitig hochgeladen.
+        </p>
       )}
-
-      {stage.stage === "finished" && (
-        <>
-          <BattleViewer brandA={brandAForViewer} brandB={brandBForViewer} />
-          {stage.resolution === "voted" && (
-            <VotePanel
-              battleId={battle.id}
-              brandA={battle.brandA}
-              brandB={battle.brandB}
-              tally={tally}
-              userVote={userVote}
-              canVote={canVote}
-              isLoggedIn={Boolean(viewer)}
-              revealSplit={true}
-              votingEndsAt={battle.votingEndsAt ?? new Date()}
-            />
-          )}
-          {stage.resolution === "walkover" && (
-            <p className="mx-auto mt-6 max-w-[380px] rounded-xl border border-zinc-800 p-4 text-center text-sm text-zinc-400">
-              🏆 Sieg durch Nichtantritt für{" "}
-              <span className="font-semibold text-orange-400">
-                {stage.winnerBrandId === battle.brandAId ? battle.brandA.name : battle.brandB.name}
-              </span>{" "}
-              — die Gegenseite hat ihr Video nicht rechtzeitig hochgeladen.
-            </p>
-          )}
-          {stage.resolution === "no_show" && (
-            <p className="mx-auto mt-6 max-w-[380px] rounded-xl border border-zinc-800 p-4 text-center text-sm text-zinc-500">
-              Keine Seite hat rechtzeitig ein Video hochgeladen — dieser Pitch kam nicht zustande.
-            </p>
-          )}
-        </>
+      {stage.stage === "finished" && stage.resolution === "no_show" && (
+        <p className="mx-auto mt-6 max-w-[380px] rounded-xl border border-zinc-800 p-4 text-center text-sm text-zinc-500">
+          Keine Seite hat rechtzeitig ein Video hochgeladen — dieser Pitch kam nicht zustande.
+        </p>
       )}
 
       <CommentSection battleId={battle.id} comments={comments} isLoggedIn={Boolean(viewer)} />

@@ -11,9 +11,8 @@ import { CreateBrandForm } from "@/components/brand/create-brand-form";
 import { VideoUploadForm } from "@/components/brand/video-upload-form";
 import { VideoPlayer } from "@/components/brand/video-player";
 import { IncomingChallengeList, OutgoingChallengeList } from "@/components/challenge/challenge-list";
-import { NotificationList } from "@/components/notification/notification-list";
 import { getIncomingChallenges, getOutgoingChallenges } from "@/lib/challenge";
-import { getNotificationsForUser } from "@/lib/notification";
+import { getUnreadNotificationCount } from "@/lib/notification";
 
 // This page reads challenges, notifications etc. below via requireUser()
 // -> auth() (cookies), so it's already dynamic — no explicit flag needed.
@@ -22,10 +21,10 @@ export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
   const brand = await getBrandForUser(sessionUser.id);
-  const [incomingChallenges, outgoingChallenges, recentNotifications] = await Promise.all([
+  const [incomingChallenges, outgoingChallenges, unreadCount] = await Promise.all([
     brand ? getIncomingChallenges(brand.id) : Promise.resolve([]),
     brand ? getOutgoingChallenges(brand.id) : Promise.resolve([]),
-    getNotificationsForUser(sessionUser.id),
+    getUnreadNotificationCount(sessionUser.id),
   ]);
 
   if (!user) {
@@ -86,12 +85,15 @@ export default async function ProfilePage() {
         )}
       </div>
 
-      {recentNotifications.length > 0 && (
-        <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">Benachrichtigungen</h2>
-          <NotificationList notifications={recentNotifications} />
-        </div>
-      )}
+      <Link
+        href="/notifications"
+        className="mb-8 flex items-center justify-between rounded-2xl border border-zinc-800 bg-zinc-950 p-6 hover:border-zinc-600"
+      >
+        <span className="text-lg font-semibold text-white">🔔 Benachrichtigungen</span>
+        <span className="text-sm text-orange-400">
+          {unreadCount > 0 ? `${unreadCount} ungelesen →` : "Ansehen →"}
+        </span>
+      </Link>
 
       <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
         <h2 className="mb-4 text-lg font-semibold text-white">Meine Marke</h2>

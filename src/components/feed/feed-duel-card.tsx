@@ -233,9 +233,6 @@ export function FeedDuelCard({
           >
             ↔ Antwort von {opponent.brandName} ansehen
           </button>
-          <Link href={`/pitches/${duel.battleId}`} className="hover:underline">
-            beide direkt vergleichen
-          </Link>
         </div>
         <div className="pointer-events-auto">
           <VoteState duel={duel} sideIndex={sideIndex} isLoggedIn={isLoggedIn} onVote={handleVote} voting={voting} />

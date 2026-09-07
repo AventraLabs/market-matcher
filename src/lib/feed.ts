@@ -181,6 +181,17 @@ export async function getForYouFeed(viewerId: string | null, offset = 0, limit =
   return { items: duels.slice(offset, offset + limit), total: duels.length };
 }
 
+/**
+ * One specific Duell by battleId, for deep-linking into the Feed (e.g. from
+ * a notification, or a reminder that just went live) — reuses the same
+ * eligibility rule as the rest of the feed, so it returns null for anything
+ * not actually live/finished-and-voted yet.
+ */
+export async function getFeedDuelById(viewerId: string | null, battleId: string): Promise<FeedDuel | null> {
+  const duels = await buildFeedDuels(viewerId);
+  return duels.find((d) => d.battleId === battleId) ?? null;
+}
+
 /** "Folge ich" — only Duelle where a followed brand is on one of the two sides, newest first. */
 export async function getFollowingFeed(viewerId: string, offset = 0, limit = 6): Promise<FeedPage> {
   const followedBrandIds = await getFollowedBrandIds(viewerId);

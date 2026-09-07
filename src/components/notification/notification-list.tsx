@@ -51,7 +51,11 @@ export function NotificationList({ notifications }: { notifications: Notificatio
           return (
             <li key={n.id}>
               {n.battleId ? (
-                <Link href={`/pitches/${n.battleId}`} className="block hover:opacity-80">
+                // Every notification that carries a battleId is created the
+                // moment that battle goes live (see
+                // activateBattleIfBothSidesReady) — so it's always safe to
+                // deep-link straight into the Feed, never the old detail page.
+                <Link href={`/?battle=${n.battleId}`} className="block hover:opacity-80">
                   {content}
                 </Link>
               ) : (

@@ -416,6 +416,50 @@ Fix, chosen from three options put to the user (`AskUserQuestion`; picked
   Duell/side-agnostic enough to need no changes, just a client that now points
   them at whichever side is active.
 
+**Phase 10 — Pitches becomes "coming next", plus a real notifications screen:**
+
+Follow-up product discussion, verbatim from the user: after Phase 9.1 made a Feed card
+do everything the old `/pitches/[id]` detail page did (video, vote, comment, switch
+sides), he pointed out the two screens had become near-duplicates with no good reason —
+*"wo ist also der Unterschied bei diesen Tabs?"* — and separately flagged that a
+"favorite/reminder" mechanic needs somewhere to live, or a reminder can be set, the Pitch
+can go live, get missed in the Feed, and then be un-findable — *"man weiß nicht mehr was
+man sehen wollte."* Two changes, agreed via a quick multiple-choice question plus his own
+follow-up idea:
+
+- **`/pitches` is now a "coming next" preview, not a second way to watch.** It only lists
+  Duelle still in `awaiting_videos` — both brand names, the platform's idea/category text
+  (`battle.category`), and the submission deadline. The instant both videos are in, a
+  Duell disappears from this list; from then on it exists only in the Feed. No more
+  stage badges or vote counts here — those belonged to the old "watch it here too" version
+  of this page.
+- **`🔔 Erinnern`** (`src/lib/reminder.ts`, `battle_reminders` table) — a reminder on one
+  specific upcoming Duell, deliberately separate from `follows`: works even if you don't
+  follow either brand yet. `activateBattleIfBothSidesReady()` in `battle-stage.ts` now
+  fans out to reminder-setters too when a Pitch goes live, with distinct wording
+  ("Dein vorgemerkter Pitch ist live") from the existing follow-based notification, and
+  skips anyone already covered by a follow so nobody gets notified twice.
+- **`/pitches/[id]` is now only the waiting room.** Upload form for your own brand,
+  comments (still visible pre-reveal, unchanged from Phase 8), and the walkover/no-show
+  outcome messages. The moment a battle's stage is `voting` or `finished`+`voted`, this
+  page `redirect()`s straight to `/?battle=<id>` — every existing link into this page
+  (accepting a challenge, an open-mode counter that's instantly live, a notification, an
+  old bookmark) keeps working, it just lands in the Feed instead of a second video-viewing
+  UI. `getFeedDuelById()` in `feed.ts` and a `?battle=` param on `page.tsx` make that deep
+  link land scrolled to the right card (`FeedClient` reads `data-battle-id` to scroll to
+  it on mount) rather than at the top of the ranked list.
+- **A real `/notifications` screen** (`src/components/nav/bottom-nav.tsx` gained a 🔔 tab
+  with an unread-count badge) — previously notifications only showed as a small block on
+  `/profile`, which is exactly how one could get lost. Every notification (follow-based or
+  reminder-based) stays listed here, read or not, and links straight into the Feed. The
+  Profile page now just shows a one-line teaser linking to this screen instead of
+  duplicating the list.
+- **Deliberately out of scope:** push/email delivery for notifications (still in-app
+  only, unchanged since Phase 5.1); a way to browse/search *finished* Duelle outside the
+  Feed's own pagination — the user's call was that a fizzled (walkover/no-show) or
+  finished Duell not showing up anywhere public isn't a loss, since it was never real
+  content to browse.
+
 ## 4. The two-real-inboxes test
 
 This is the test described for Phase 1 — two different people, two real inboxes,

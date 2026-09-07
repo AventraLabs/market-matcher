@@ -11,10 +11,12 @@ export function FeedClient({
   initialItems,
   initialTotal,
   isLoggedIn,
+  focusBattleId,
 }: {
   initialItems: FeedDuel[];
   initialTotal: number;
   isLoggedIn: boolean;
+  focusBattleId?: string | null;
 }) {
   const [tab, setTab] = useState<Tab>("foryou");
   const [items, setItems] = useState<FeedDuel[]>(initialItems);
@@ -63,6 +65,16 @@ export function FeedClient({
       setLoading(false);
     }
   }, [tab, items.length, total]);
+
+  // Phase 10: deep-link from a notification/reminder — land straight on
+  // that Pitch's card instead of the top of the ranked feed. Runs once;
+  // page.tsx already guaranteed the card is in `initialItems`.
+  useEffect(() => {
+    if (!focusBattleId) return;
+    const target = document.querySelector(`[data-battle-id="${focusBattleId}"]`);
+    target?.scrollIntoView({ behavior: "auto", block: "start" });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally once, on mount
+  }, []);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -132,7 +144,10 @@ export function FeedClient({
   }
 
   function handleShare(duel: FeedDuel) {
-    const url = `${window.location.origin}/pitches/${duel.battleId}`;
+    // Phase 10: /pitches/[id] is only the awaiting-videos waiting room now
+    // — a live Duell only exists in the Feed, so that's what a share link
+    // has to point at.
+    const url = `${window.location.origin}/?battle=${duel.battleId}`;
     const shareData = { title: `${duel.sides[0].brandName} vs. ${duel.sides[1].brandName} auf Market Matcher`, url };
     if (navigator.share) {
       navigator.share(shareData).catch(() => {});
