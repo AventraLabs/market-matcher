@@ -1,5 +1,5 @@
 import "server-only";
-import { desc, eq } from "drizzle-orm";
+import { count, desc, eq, inArray } from "drizzle-orm";
 import { db } from "@/db";
 import { comments, users } from "@/db/schema";
 
@@ -33,4 +33,15 @@ export async function getCommentsForBattle(battleId: string): Promise<CommentWit
     // reads better than "—" under a comment.
     authorName: row.name || row.email.split("@")[0],
   }));
+}
+
+/** Comment counts for a batch of battles — one query for a whole feed page. */
+export async function getCommentCounts(battleIds: string[]): Promise<Map<string, number>> {
+  if (battleIds.length === 0) return new Map();
+  const rows = await db
+    .select({ battleId: comments.battleId, n: count() })
+    .from(comments)
+    .where(inArray(comments.battleId, battleIds))
+    .groupBy(comments.battleId);
+  return new Map(rows.map((row) => [row.battleId, row.n]));
 }

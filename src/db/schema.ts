@@ -279,3 +279,31 @@ export const comments = pgTable("comments", {
 
 export type Comment = typeof comments.$inferSelect;
 export type NewComment = typeof comments.$inferInsert;
+
+// Phase 9: likes. A generic "like this video" heart, one per user per
+// battle-side (battleId + brandId identifies exactly one card in the
+// feed — a battle has two sides, each with its own video and its own like
+// count). Deliberately separate from `votes`: a like is a free, repeatable-
+// per-video reaction like TikTok's heart, a vote is the one-per-battle
+// "who wins this Pitch" decision — a viewer can like both sides but can
+// only vote for one.
+export const likes = pgTable(
+  "likes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    battleId: uuid("battle_id")
+      .notNull()
+      .references(() => battles.id, { onDelete: "cascade" }),
+    brandId: uuid("brand_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("likes_battle_brand_user_unique_idx").on(table.battleId, table.brandId, table.userId)],
+);
+
+export type Like = typeof likes.$inferSelect;
+export type NewLike = typeof likes.$inferInsert;

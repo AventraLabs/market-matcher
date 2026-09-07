@@ -22,3 +22,9 @@ export async function getFollowerUserIds(brandId: string): Promise<string[]> {
   const rows = await db.select({ userId: follows.userId }).from(follows).where(eq(follows.brandId, brandId));
   return rows.map((r) => r.userId);
 }
+
+/** Every brand this user follows — used for the feed's "Folge ich" tab. */
+export async function getFollowedBrandIds(userId: string): Promise<string[]> {
+  const rows = await db.select({ brandId: follows.brandId }).from(follows).where(eq(follows.userId, userId));
+  return rows.map((r) => r.brandId);
+}

@@ -75,7 +75,15 @@ That's enough to test the whole flow solo.
   computed at read time from these fields, same philosophy as challenges'
   effectiveStatus(). See `src/lib/battle-stage.ts`.
 
-More tables (Vote, ...) get added in later phases, on top of this.
+- **comments** (Phase 8) — battleId, userId, content, createdAt. Flat, no threading —
+  a TikTok/Reels-style list under a Pitch, newest first.
+- **likes** (Phase 9) — battleId + brandId + userId, unique per triple. A generic
+  "like this video" heart, one per user per battle-*side* (a battle has two videos,
+  each with its own like count) — deliberately separate from `votes`: a like is a
+  free, repeatable reaction, a vote is the one-per-battle "who wins" decision. A
+  viewer can like both sides of a Pitch but can only vote for one.
+
+More tables get added in later phases, on top of this.
 
 ## 3. What's implemented
 
@@ -279,6 +287,75 @@ additive (no battle-stage logic touched):
   Assent, including a Pitch's own brands), visible at every stage including
   `awaiting_videos`. No edit/delete UI yet, no nested replies — a known rough edge,
   not a blocker for testing whether comments add anything.
+
+**Phase 9 — the feed (TikTok/Reels-style, the new home screen):**
+
+Product direction, verbatim: make the home screen a real full-screen, vertically-
+scrolling video feed — "das wird die Revolution", "so wie man es kennt" — with the
+standard social actions (Like, Comment, Share) plus voting worked in wherever a
+video belongs to a Pitch, and a way to see both what's trending and what brands you
+follow just posted.
+
+- **`/` *is* the feed now**, for everyone, logged in or not (`src/app/page.tsx` →
+  `FeedClient`). One full-screen video per swipe, scroll-snap (`snap-y
+  snap-mandatory` + `snap-start snap-always`), autoplay/pause driven by a per-card
+  `IntersectionObserver` (plays once ≥60% visible, pauses otherwise — no shared
+  "one video at a time" coordinator needed since scroll-snap already guarantees
+  only one card is ever mostly-visible at a time). Tap a video to mute/unmute (starts
+  muted, autoplay-safe). Register/login now redirect to `/` instead of `/profile`.
+- **One card per battle *side*, not per battle.** "Das Video ist der ganze
+  Bildschirm" — a battle has two videos, so it produces two feed cards, each full-
+  screen, each with its own like count. A card only exists once both sides of its
+  battle are actually visible under the existing Phase 7 "hidden results" rule
+  (`stage.stage === "voting"` or `"finished"`/`"voted"`) — nothing pre-reveal, no
+  walkover/no-show, ever shows up in the feed. `src/lib/feed.ts` is the query
+  layer; `getForYouFeed`/`getFollowingFeed`.
+- **Two tabs**, mirroring TikTok's own For You/Following split — the product ask
+  ("Trending oder For You oder was Neues" + "gefolgte Firmen posten neue Pitches")
+  collapses cleanly into exactly this:
+  - **Für dich** — every live/finished Pitch, ranked by a *live-computed* trending
+    score (`trendingScore()` in `src/lib/feed.ts`) — engagement (likes + 1.5×
+    comments + 2× votes) divided by a recency decay. Not persisted or cached, same
+    philosophy as `getBattleStage()`/`effectiveStatus()` elsewhere in this app:
+    recompute from current counts every time rather than let a cached rank drift.
+    Fine at today's scale; revisit if it ever stops being cheap.
+  - **Folge ich** — only cards from brands the viewer follows
+    (`getFollowedBrandIds()`, new in `src/lib/follow.ts`), newest first. Empty state
+    prompts to follow brands (or log in, if logged out) — this is also the tab that
+    answers "did a brand I follow just post something".
+  - A `FollowButton` sits right on each feed card next to the brand name, so
+    discovering a brand in "Für dich" and following it happens without leaving the
+    feed.
+- **Like** — a heart, independent of voting (`likes` table above). Optimistic on
+  tap, backed by `POST /api/feed/like`.
+- **Comment** — opens a bottom sheet (`CommentSheet`) over the feed reusing the
+  same `comments` table/thread as the `/pitches/[id]` page — post from either
+  place, see it in both.
+- **Vote** — a single button per card, "🏆 Für {brand} stimmen", since a feed card
+  only shows one side at a time (you'd scroll to the other card to vote for the
+  opponent instead). Same rules as `/pitches/[id]`'s vote panel, same hidden-until-
+  finished split — `castVoteForUser()` in `src/lib/vote.ts` is now the one shared
+  implementation both the Pitch page's form action and the feed's vote API call
+  into (a small refactor, not a behavior change).
+- **Share** — deliberately scoped down to a real share link (native
+  `navigator.share()`, clipboard-copy fallback), not an in-app "send to a friend"
+  DM — that would need a whole friends/messaging system this phase didn't call
+  for. The link points at `/pitches/[id]`, which already shows the full pitch
+  (both sides, vote panel, comments).
+- **Why route handlers, not Server Actions, for like/vote/comment here.** Every
+  other write in this app so far is a Server Action ending in `refresh()` — fine
+  for a form on an otherwise-static page, wrong for an infinite-scroll video feed,
+  where re-rendering the whole route on every tap would reset scroll position and
+  interrupt playback. `/api/feed`, `/api/feed/like`, `/api/feed/vote`,
+  `/api/feed/comments` are plain JSON route handlers instead; the feed client
+  patches its own local state after each response.
+- **A persistent bottom nav** (`src/components/nav/bottom-nav.tsx`, mounted in
+  `src/app/layout.tsx`) — Feed / Pitches / Marken / Profil-or-Anmelden — floats
+  over the feed the same way TikTok's own nav does, and sits below the normal
+  page padding (`py-16`) everywhere else.
+- **Deliberately out of scope:** an in-app friends/DM system for "Teilen" (see
+  above), any persisted/cached trending score, and video transcoding/thumbnailing
+  (unchanged from Phase 3 — still relying on the browser's own `<video>` decoding).
 
 ## 4. The two-real-inboxes test
 

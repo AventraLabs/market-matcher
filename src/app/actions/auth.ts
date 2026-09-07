@@ -54,7 +54,7 @@ export async function registerUser(_prevState: FormState, formData: FormData): P
   await issueVerificationToken(user.id, user.email);
 
   try {
-    await signIn("credentials", { email, password, redirectTo: "/profile" });
+    await signIn("credentials", { email, password, redirectTo: "/" });
   } catch (error) {
     if (error instanceof AuthError) {
       return {
@@ -77,7 +77,7 @@ export async function loginUser(_prevState: FormState, formData: FormData): Prom
     await signIn("credentials", {
       email: parsed.data.email,
       password: parsed.data.password,
-      redirectTo: "/profile",
+      redirectTo: "/",
     });
   } catch (error) {
     if (error instanceof AuthError) {

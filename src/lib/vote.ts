@@ -1,7 +1,7 @@
 import "server-only";
-import { and, count, eq, inArray } from "drizzle-orm";
+import { and, count, eq, inArray, or } from "drizzle-orm";
 import { db } from "@/db";
-import { votes } from "@/db/schema";
+import { battles, brandMembers, votes } from "@/db/schema";
 
 export type VoteTally = { brandAVotes: number; brandBVotes: number; total: number };
 
@@ -36,4 +36,48 @@ export async function getVoteTotals(battleIds: string[]): Promise<Map<string, nu
     .where(inArray(votes.battleId, battleIds))
     .groupBy(votes.battleId);
   return new Map(rows.map((r) => [r.battleId, r.n]));
+}
+
+/**
+ * The actual vote-casting logic, shared by the /pitches/[id] page's form
+ * action (src/app/actions/vote.ts) and the feed's vote API route
+ * (src/app/api/feed/vote/route.ts) — same rules either way: a brand's own
+ * team can't vote in its own Pitch, and one vote per battle per user (the
+ * unique index on (battleId, userId) is the real backstop, this check is
+ * just for a friendly error message).
+ */
+export async function castVoteForUser(
+  userId: string,
+  battleId: string,
+  votedForBrandId: string,
+): Promise<{ error?: string }> {
+  const [battle] = await db.select().from(battles).where(eq(battles.id, battleId)).limit(1);
+  if (!battle) {
+    return { error: "Dieser Pitch existiert nicht." };
+  }
+  if (votedForBrandId !== battle.brandAId && votedForBrandId !== battle.brandBId) {
+    return { error: "Ungültige Marke für diesen Pitch." };
+  }
+
+  const [ownMembership] = await db
+    .select({ brandId: brandMembers.brandId })
+    .from(brandMembers)
+    .where(
+      and(
+        eq(brandMembers.userId, userId),
+        or(eq(brandMembers.brandId, battle.brandAId), eq(brandMembers.brandId, battle.brandBId)),
+      ),
+    )
+    .limit(1);
+  if (ownMembership) {
+    return { error: "Du kannst nicht bei einem Pitch deiner eigenen Marke abstimmen." };
+  }
+
+  const existingVote = await getUserVote(battleId, userId);
+  if (existingVote) {
+    return { error: "Du hast bereits abgestimmt." };
+  }
+
+  await db.insert(votes).values({ battleId, userId, votedForBrandId }).onConflictDoNothing();
+  return {};
 }
