@@ -3,7 +3,9 @@
 > Werbung wird zum Entertainment.
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
-(video).**
+(video), Phase 4 (challenges).**
+
+**Live:** https://market-matcher-neon.vercel.app
 
 Stack: Next.js 16 (App Router, TypeScript) · Tailwind CSS 4 · Drizzle ORM · Postgres
 (Supabase) · Auth.js v5 (Credentials) · Resend.
@@ -44,10 +46,13 @@ That's enough to test the whole flow solo.
   `src/app/actions/brand.ts`) — the schema doesn't stop it, so lifting that limit
   later is a one-line change.
 - **brands.videoUrl / videoUploadedAt** — one showcase video per brand (Phase 3). A
-  brand's actual battle submissions get their own table once Phase 4/5 need it; this
+  brand's actual battle submissions get their own table once Phase 5 needs it; this
   is just "the video on my public profile" for now.
+- **challenges** (Phase 4) — challengerBrandId, challengedBrandId, status
+  (pending/accepted/declined/expired), expiresAt (createdAt + 24h), respondedAt,
+  timestamps. Partial unique index on (challenger, challenged) WHERE status='pending'.
 
-More tables (Battle, Vote, Challenge, ...) get added in later phases, on top of this.
+More tables (Battle, Vote, ...) get added in later phases, on top of this.
 
 ## 3. What's implemented
 
@@ -88,8 +93,25 @@ More tables (Battle, Vote, Challenge, ...) get added in later phases, on top of 
   Actions no longer auto-refresh the invoking route's server-rendered data, so without
   it the new video wouldn't show up on `/profile` until a manual reload.
 
-Deliberately out of scope so far: battles, voting, challenges, rankings — anything
-from the full product spec beyond accounts, a brand's own profile, and its video.
+**Phase 4 — challenges:**
+
+- `/brands` — public list of all brands (discovery, so there's something to challenge).
+- `/brands/[slug]` — logged-in visitors with their own brand see a "Herausfordern" button
+  (hidden on their own brand's page, or once a live challenge already exists between the
+  two brands in either direction).
+- `/profile` — a "Herausforderungen" card: incoming challenges (with Annehmen/Ablehnen)
+  and outgoing challenges (with status).
+- 24h window to accept/decline. No cron job — `effectiveStatus()` in `src/lib/challenge.ts`
+  computes "expired" from `expiresAt` at read time, so a stale row is correct the moment
+  anyone looks, regardless of how long it's been. `respondToChallenge` additionally
+  persists the `expired` status the first time someone tries to act on a stale one.
+- A partial unique index (`challenges_challenger_challenged_pending_idx`) stops the same
+  brand from firing off duplicate *pending* challenges in the same direction at the DB
+  level; the opposite-direction and general "already have a live one" checks are
+  application-level (`getLivePendingChallengeBetween`).
+
+Deliberately out of scope so far: the actual battle (content side-by-side) and voting —
+Phase 5 and 6.
 
 ## 4. The two-real-inboxes test
 

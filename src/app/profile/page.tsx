@@ -10,11 +10,16 @@ import { ChangePasswordForm } from "@/components/auth/change-password-form";
 import { CreateBrandForm } from "@/components/brand/create-brand-form";
 import { VideoUploadForm } from "@/components/brand/video-upload-form";
 import { VideoPlayer } from "@/components/brand/video-player";
+import { IncomingChallengeList, OutgoingChallengeList } from "@/components/challenge/challenge-list";
+import { getIncomingChallenges, getOutgoingChallenges } from "@/lib/challenge";
 
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
   const brand = await getBrandForUser(sessionUser.id);
+  const [incomingChallenges, outgoingChallenges] = brand
+    ? await Promise.all([getIncomingChallenges(brand.id), getOutgoingChallenges(brand.id)])
+    : [[], []];
 
   if (!user) {
     // Session refers to a user that no longer exists in the DB — shouldn't
@@ -99,6 +104,20 @@ export default async function ProfilePage() {
             </div>
           )}
           <VideoUploadForm hasVideo={Boolean(brand.videoUrl)} />
+        </div>
+      )}
+
+      {brand && (
+        <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">Herausforderungen</h2>
+          <div className="mb-6">
+            <h3 className="mb-2 text-sm font-medium text-zinc-400">Eingehend</h3>
+            <IncomingChallengeList challenges={incomingChallenges} />
+          </div>
+          <div>
+            <h3 className="mb-2 text-sm font-medium text-zinc-400">Gesendet</h3>
+            <OutgoingChallengeList challenges={outgoingChallenges} />
+          </div>
         </div>
       )}
 

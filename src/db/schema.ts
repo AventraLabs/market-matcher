@@ -1,4 +1,5 @@
 import { pgTable, uuid, text, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // Phase 1: just what real authentication needs.
 // More tables (Brand, Battle, Vote, ...) get added in later phases.
@@ -87,3 +88,35 @@ export const brandMembers = pgTable(
 
 export type Brand = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
+
+// Phase 4: challenges. Brand A challenges Brand B; Brand B has 24h to
+// accept or decline. Expiry is computed at read time (challengeStatus()
+// in src/lib/challenge.ts) rather than via a cron job — simpler, and
+// correct regardless of how long it's been since anyone looked.
+export const challenges = pgTable(
+  "challenges",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    challengerBrandId: uuid("challenger_brand_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    challengedBrandId: uuid("challenged_brand_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    // 'pending' | 'accepted' | 'declined' — expiry is derived, not stored,
+    // except we flip a pending row to 'expired' the next time it's touched
+    // (respondToChallenge) so a stale row doesn't look actionable forever.
+    status: text("status").notNull().default("pending"),
+    expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+    respondedAt: timestamp("responded_at", { withTimezone: true }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex("challenges_challenger_challenged_pending_idx")
+      .on(table.challengerBrandId, table.challengedBrandId)
+      .where(sql`${table.status} = 'pending'`),
+  ],
+);
+
+export type Challenge = typeof challenges.$inferSelect;
+export type NewChallenge = typeof challenges.$inferInsert;

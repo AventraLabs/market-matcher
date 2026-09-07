@@ -37,7 +37,13 @@ export default async function Home() {
         )}
       </div>
 
-      <p className="mt-16 text-xs text-zinc-600">Phase 1 — Accounts, Login, E-Mail-Verifizierung, Passwort-Reset.</p>
+      <Link href="/brands" className="mt-6 text-sm text-orange-500 hover:underline">
+        Marken entdecken →
+      </Link>
+
+      <p className="mt-16 text-xs text-zinc-600">
+        Phase 1-4 — Accounts, Marken, Video, Challenges.
+      </p>
     </div>
   );
 }

@@ -3,6 +3,10 @@ import { eq } from "drizzle-orm";
 import { db } from "@/db";
 import { brands } from "@/db/schema";
 import { VideoPlayer } from "@/components/brand/video-player";
+import { ChallengeButton } from "@/components/challenge/challenge-button";
+import { getOptionalUser } from "@/lib/session";
+import { getBrandForUser } from "@/lib/brand";
+import { getLivePendingChallengeBetween } from "@/lib/challenge";
 
 const COUNTRY_LABELS: Record<string, string> = {
   AT: "Österreich",
@@ -16,6 +20,12 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
   const [brand] = await db.select().from(brands).where(eq(brands.slug, slug)).limit(1);
 
   if (!brand) notFound();
+
+  const viewer = await getOptionalUser();
+  const viewerBrand = viewer ? await getBrandForUser(viewer.id) : null;
+  const isOwnBrand = viewerBrand?.id === brand.id;
+  const livePending =
+    viewerBrand && !isOwnBrand ? await getLivePendingChallengeBetween(viewerBrand.id, brand.id) : null;
 
   return (
     <div className="mx-auto w-full max-w-lg flex-1 px-4 py-16">
@@ -59,6 +69,20 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
           <div className="mx-auto mt-6 max-w-[280px]">
             <VideoPlayer src={brand.videoUrl} />
           </div>
+        )}
+
+        {viewerBrand && !isOwnBrand && (
+          <>
+            {livePending ? (
+              <p className="mt-6 text-center text-sm text-zinc-400">
+                {livePending.challengerBrandId === viewerBrand.id
+                  ? "Du hast diese Marke bereits herausgefordert — Antwort steht noch aus."
+                  : "Diese Marke hat dich bereits herausgefordert — schau in deinem Profil vorbei."}
+              </p>
+            ) : (
+              <ChallengeButton challengedBrandId={brand.id} />
+            )}
+          </>
         )}
       </div>
     </div>
