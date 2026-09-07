@@ -572,6 +572,14 @@ fact.
   succeeds once even if several requests race to finalize the same battle, so pushes never
   go out twice. On a platform whose whole premise is people checking back every few
   minutes, this fires close to real-time in practice, for free, on any Vercel plan.
+- **`GET /api/admin/seed-demo?key=...`** — the demo-content seed from Phase 11
+  (`seedDemoContent()`, now factored out to `src/lib/seed-demo-data.ts` so both this route
+  and `npm run db:seed-demo` share one implementation) is also reachable as a plain URL,
+  gated by an `ADMIN_SEED_KEY` env var compared against the `key` query param. The point:
+  seeding a fresh Vercel deployment's prod database should never require anyone to copy a
+  Supabase connection string into a terminal — visiting one URL after each deploy does it.
+  Safe to visit more than once (re-rolls the same namespaced demo rows, see
+  `seedDemoContent`'s own comment).
 - **Not done yet, flagged for later:** an unsubscribe/manage-notifications UI (today,
   denying the browser permission prompt is the only way out); notifications for anything
   other than "your voted Pitch has a result" (a new challenge, a live-follower alert, etc.
@@ -609,8 +617,25 @@ receive mail, and everyone else's flow has to be tested via the printed console 
 1. Push this repo to GitHub (see below), then import it at vercel.com/new.
 2. Add environment variables: `DATABASE_URL`, `AUTH_SECRET`, `APP_URL` (your
    `https://<project>.vercel.app` URL, or custom domain), `RESEND_API_KEY`,
-   `EMAIL_FROM`.
+   `EMAIL_FROM`, plus the Phase 12 ones below.
 3. Deploy. Vercel builds and runs `next build` automatically.
+4. After each deploy, visit `https://<your-app>/api/admin/seed-demo?key=<ADMIN_SEED_KEY>`
+   once to (re)populate the demo content from Phase 11 — see that section above.
+
+### Push notifications (Phase 12) — required env vars
+
+Three more environment variables, all self-generated (not a third-party account):
+
+- `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` — a keypair for signing push
+  messages. Generate a fresh pair with `npx web-push generate-vapid-keys`, or reuse the
+  ones from this phase's delivery message. `VAPID_SUBJECT` (e.g.
+  `mailto:you@example.com`) is required by the push spec but not otherwise used.
+- `ADMIN_SEED_KEY` — any random string (e.g. `openssl rand -base64 24`) — the shared
+  secret for the `/api/admin/seed-demo` URL above.
+
+Without these set, the app still runs fine — `isPushConfigured()` in `src/lib/push.ts`
+makes push a no-op rather than an error, and the seed endpoint just returns a clear 500
+telling you `ADMIN_SEED_KEY` isn't set yet.
 
 ### Resend (email) — and the domain question
 
