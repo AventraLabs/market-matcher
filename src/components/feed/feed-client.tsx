@@ -1,28 +1,23 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { FeedItem, FeedPage } from "@/lib/feed";
-import { FeedVideoCard } from "@/components/feed/feed-video-card";
+import type { FeedDuel, FeedPage } from "@/lib/feed";
+import { FeedDuelCard } from "@/components/feed/feed-duel-card";
 import { CommentSheet } from "@/components/feed/comment-sheet";
 
 type Tab = "foryou" | "following";
-
-// FeedItem as it arrives over JSON (Date fields already stringified by
-// getForYouFeed/getFollowingFeed — this type just documents that on the
-// client side, structurally identical otherwise).
-type SerializedFeedItem = FeedItem;
 
 export function FeedClient({
   initialItems,
   initialTotal,
   isLoggedIn,
 }: {
-  initialItems: SerializedFeedItem[];
+  initialItems: FeedDuel[];
   initialTotal: number;
   isLoggedIn: boolean;
 }) {
   const [tab, setTab] = useState<Tab>("foryou");
-  const [items, setItems] = useState<SerializedFeedItem[]>(initialItems);
+  const [items, setItems] = useState<FeedDuel[]>(initialItems);
   const [total, setTotal] = useState(initialTotal);
   const [loading, setLoading] = useState(false);
   const [requiresLogin, setRequiresLogin] = useState(false);
@@ -82,59 +77,63 @@ export function FeedClient({
     return () => observer.disconnect();
   }, [loadMore]);
 
-  function patchItem(key: string, patch: Partial<SerializedFeedItem>) {
-    setItems((prev) => prev.map((item) => (item.key === key ? { ...item, ...patch } : item)));
+  function patchDuel(key: string, patch: Partial<FeedDuel>) {
+    setItems((prev) => prev.map((duel) => (duel.key === key ? { ...duel, ...patch } : duel)));
   }
 
-  async function handleToggleLike(item: FeedItem) {
+  function patchSide(key: string, sideIndex: 0 | 1, patch: Partial<FeedDuel["sides"][number]>) {
+    setItems((prev) =>
+      prev.map((duel) => {
+        if (duel.key !== key) return duel;
+        const sides = [...duel.sides] as FeedDuel["sides"];
+        sides[sideIndex] = { ...sides[sideIndex], ...patch };
+        return { ...duel, sides };
+      }),
+    );
+  }
+
+  async function handleToggleLike(duel: FeedDuel, sideIndex: 0 | 1) {
+    const side = duel.sides[sideIndex];
     // Optimistic update — a heart-tap should feel instant.
-    patchItem(item.key, {
-      viewerLiked: !item.viewerLiked,
-      likeCount: item.likeCount + (item.viewerLiked ? -1 : 1),
-    });
+    patchSide(duel.key, sideIndex, { viewerLiked: !side.viewerLiked, likeCount: side.likeCount + (side.viewerLiked ? -1 : 1) });
     try {
       const res = await fetch("/api/feed/like", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ battleId: item.battleId, brandId: item.brandId }),
+        body: JSON.stringify({ battleId: duel.battleId, brandId: side.brandId }),
       });
       const data = await res.json();
       if (res.ok) {
-        patchItem(item.key, { viewerLiked: data.liked, likeCount: data.count });
+        patchSide(duel.key, sideIndex, { viewerLiked: data.liked, likeCount: data.count });
       } else {
         // Roll back on failure (e.g. session expired mid-scroll).
-        patchItem(item.key, { viewerLiked: item.viewerLiked, likeCount: item.likeCount });
+        patchSide(duel.key, sideIndex, { viewerLiked: side.viewerLiked, likeCount: side.likeCount });
       }
     } catch {
-      patchItem(item.key, { viewerLiked: item.viewerLiked, likeCount: item.likeCount });
+      patchSide(duel.key, sideIndex, { viewerLiked: side.viewerLiked, likeCount: side.likeCount });
     }
   }
 
-  async function handleVote(item: FeedItem) {
+  async function handleVote(duel: FeedDuel, sideIndex: 0 | 1) {
+    const side = duel.sides[sideIndex];
     try {
       const res = await fetch("/api/feed/vote", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ battleId: item.battleId, votedForBrandId: item.brandId }),
+        body: JSON.stringify({ battleId: duel.battleId, votedForBrandId: side.brandId }),
       });
       const data = await res.json();
       if (res.ok && data.tally) {
-        // Both cards from this battle share one tally — update every item
-        // that belongs to it, not just the one that was tapped.
-        setItems((prev) =>
-          prev.map((i) =>
-            i.battleId === item.battleId ? { ...i, tally: data.tally, viewerVotedBrandId: data.votedForBrandId } : i,
-          ),
-        );
+        patchDuel(duel.key, { tally: data.tally, viewerVotedBrandId: data.votedForBrandId });
       }
     } catch {
       // Silent — the button just stays clickable, no state changed.
     }
   }
 
-  function handleShare(item: FeedItem) {
-    const url = `${window.location.origin}/pitches/${item.battleId}`;
-    const shareData = { title: `${item.brandName} auf Market Matcher`, url };
+  function handleShare(duel: FeedDuel) {
+    const url = `${window.location.origin}/pitches/${duel.battleId}`;
+    const shareData = { title: `${duel.sides[0].brandName} vs. ${duel.sides[1].brandName} auf Market Matcher`, url };
     if (navigator.share) {
       navigator.share(shareData).catch(() => {});
     } else if (navigator.clipboard) {
@@ -144,7 +143,7 @@ export function FeedClient({
 
   function handleCommentPosted(battleId: string) {
     setItems((prev) =>
-      prev.map((i) => (i.battleId === battleId ? { ...i, commentCount: i.commentCount + 1 } : i)),
+      prev.map((duel) => (duel.battleId === battleId ? { ...duel, commentCount: duel.commentCount + 1 } : duel)),
     );
   }
 
@@ -156,7 +155,7 @@ export function FeedClient({
       <div className="pointer-events-none absolute inset-x-0 top-0 z-20 flex justify-center gap-6 pt-[calc(env(safe-area-inset-top)+14px)]">
         {(
           [
-            ["foryou", "Für dich"],
+            ["foryou", "Feed"],
             ["following", "Folge ich"],
           ] as const
         ).map(([key, label]) => (
@@ -173,10 +172,10 @@ export function FeedClient({
       </div>
 
       <div className="h-full w-full snap-y snap-mandatory overflow-y-scroll">
-        {items.map((item) => (
-          <FeedVideoCard
-            key={item.key}
-            item={item}
+        {items.map((duel) => (
+          <FeedDuelCard
+            key={duel.key}
+            duel={duel}
             isLoggedIn={isLoggedIn}
             muted={muted}
             onToggleMute={() => setMuted((m) => !m)}

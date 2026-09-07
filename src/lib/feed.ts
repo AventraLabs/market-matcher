@@ -8,43 +8,51 @@ import { getFollowedBrandIds } from "@/lib/follow";
 import { getBrandForUser } from "@/lib/brand";
 import { VOTING_WINDOW_MS } from "@/lib/battle-format";
 
-// Phase 9: the feed. One card per battle *side* — a battle has two videos,
-// and "das Video ist der ganze Bildschirm" (one full-screen video per
-// swipe) means each side is its own feed item, not the pair. A card only
-// exists once its video is actually visible under the existing "hidden
-// results" rule (both sides in, so hasVideoA/hasVideoB are guaranteed true
-// below) — nothing pre-reveal ever appears in the feed.
-export type FeedItem = {
-  key: string; // `${battleId}:${brandId}` — stable across re-fetches
-  battleId: string;
+// Phase 9.1 — one feed entry per Duell (battle), not per side.
+//
+// Phase 9 originally split a battle into two independent feed cards, one
+// per video. Product feedback: that breaks the actual point of a Duell —
+// a viewer could scroll past brand A's video and never see brand B's, so
+// "vote on this" never really happens. A feed entry now IS the Duell:
+// `sides[0]`/`sides[1]` (always brandA/brandB, matching tally.brandAVotes/
+// brandBVotes) are both loaded, and the client shows exactly one full-
+// screen video at a time — same "one video on screen" feel — but lets the
+// viewer flip to the other side without leaving this feed position
+// (FeedDuelCard's left/right tap zones). Still nothing pre-reveal ever
+// shows up: a card only exists once both sides of its battle are visible
+// under the existing Phase 7 "hidden results" rule.
+export type FeedDuelSide = {
   brandId: string;
-  /** Which side of the underlying battle row this card is — needed to read tally.brandAVotes/brandBVotes correctly. */
-  isBrandA: boolean;
   brandName: string;
   brandSlug: string;
   brandLogoUrl: string | null;
-  opponentId: string;
-  opponentName: string;
-  opponentSlug: string;
   videoUrl: string;
+  likeCount: number;
+  viewerLiked: boolean;
+  /** Hide the follow button on your own brand's side. */
+  viewerOwnsThisBrand: boolean;
+  viewerFollowsBrand: boolean;
+};
+
+export type FeedDuel = {
+  key: string; // battleId — stable across re-fetches
+  battleId: string;
   category: string;
   isFinished: boolean;
   votingEndsAt: string | null; // ISO
   revealSplit: boolean;
   tally: VoteTally;
-  likeCount: number;
   commentCount: number;
-  viewerLiked: boolean;
   viewerVotedBrandId: string | null;
-  /** Viewer's own brand is either side of this battle — can't vote, no follow button on either card. */
+  /** Viewer's own brand is either side of this Duell — can't vote, no follow button on either side. */
   viewerOwnsThisBattle: boolean;
-  /** Viewer's own brand is specifically *this* card's brand — hide the follow button. */
-  viewerOwnsThisBrand: boolean;
-  viewerFollowsBrand: boolean;
   activatedAt: string; // ISO — when both sides went live, used for recency
+  sides: [FeedDuelSide, FeedDuelSide];
+  /** Which side to open on — the viewer's followed brand if there is one, otherwise brand A. */
+  initialSideIndex: 0 | 1;
 };
 
-async function buildFeedItems(viewerId: string | null): Promise<FeedItem[]> {
+async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
   const allBattles = await getAllBattles();
   const eligible = allBattles.filter((battle) => {
     const { videoUrlA, videoUrlB } = resolveBattleVideos(battle);
@@ -85,9 +93,10 @@ async function buildFeedItems(viewerId: string | null): Promise<FeedItem[]> {
   const viewerVoteByBattle = new Map(eligible.map((b, i) => [b.id, viewerVotes[i] ?? null]));
   const followedSet = new Set(followedBrandIds);
 
-  const items: FeedItem[] = [];
+  const duels: FeedDuel[] = [];
   for (const battle of eligible) {
     const { videoUrlA, videoUrlB } = resolveBattleVideos(battle);
+    if (!videoUrlA || !videoUrlB) continue; // guaranteed by the eligibility filter, kept for type-narrowing
     const tally = talliesByBattle.get(battle.id)!;
     const stage = getBattleStage(
       {
@@ -110,43 +119,42 @@ async function buildFeedItems(viewerId: string | null): Promise<FeedItem[]> {
       viewerBrand && (viewerBrand.id === battle.brandAId || viewerBrand.id === battle.brandBId),
     );
 
-    const sides = [
-      { self: battle.brandA, opponent: battle.brandB, videoUrl: videoUrlA, isBrandA: true },
-      { self: battle.brandB, opponent: battle.brandA, videoUrl: videoUrlB, isBrandA: false },
-    ];
-
-    for (const side of sides) {
-      if (!side.videoUrl) continue;
-      const key = `${battle.id}:${side.self.id}`;
-      items.push({
-        key,
-        battleId: battle.id,
-        brandId: side.self.id,
-        isBrandA: side.isBrandA,
-        brandName: side.self.name,
-        brandSlug: side.self.slug,
-        brandLogoUrl: side.self.logoUrl,
-        opponentId: side.opponent.id,
-        opponentName: side.opponent.name,
-        opponentSlug: side.opponent.slug,
-        videoUrl: side.videoUrl,
-        category: battle.category,
-        isFinished,
-        votingEndsAt: battle.votingEndsAt ? battle.votingEndsAt.toISOString() : null,
-        revealSplit: isFinished,
-        tally,
+    const rawSides: [typeof battle.brandA, typeof battle.brandB] = [battle.brandA, battle.brandB];
+    const videoUrls = [videoUrlA, videoUrlB];
+    const sides = rawSides.map((brand, i): FeedDuelSide => {
+      const key = `${battle.id}:${brand.id}`;
+      return {
+        brandId: brand.id,
+        brandName: brand.name,
+        brandSlug: brand.slug,
+        brandLogoUrl: brand.logoUrl,
+        videoUrl: videoUrls[i]!,
         likeCount: likeCounts.get(key) ?? 0,
-        commentCount,
         viewerLiked: viewerLikedKeys.has(key),
-        viewerVotedBrandId,
-        viewerOwnsThisBattle,
-        viewerOwnsThisBrand: viewerBrand?.id === side.self.id,
-        viewerFollowsBrand: followedSet.has(side.self.id),
-        activatedAt: activatedAt.toISOString(),
-      });
-    }
+        viewerOwnsThisBrand: viewerBrand?.id === brand.id,
+        viewerFollowsBrand: followedSet.has(brand.id),
+      };
+    }) as [FeedDuelSide, FeedDuelSide];
+
+    const initialSideIndex: 0 | 1 = followedSet.has(sides[1].brandId) && !followedSet.has(sides[0].brandId) ? 1 : 0;
+
+    duels.push({
+      key: battle.id,
+      battleId: battle.id,
+      category: battle.category,
+      isFinished,
+      votingEndsAt: battle.votingEndsAt ? battle.votingEndsAt.toISOString() : null,
+      revealSplit: isFinished,
+      tally,
+      commentCount,
+      viewerVotedBrandId,
+      viewerOwnsThisBattle,
+      activatedAt: activatedAt.toISOString(),
+      sides,
+      initialSideIndex,
+    });
   }
-  return items;
+  return duels;
 }
 
 /**
@@ -155,26 +163,32 @@ async function buildFeedItems(viewerId: string | null): Promise<FeedItem[]> {
  * maintain a cached rank that can drift. Small platform, small dataset,
  * this is cheap; a future phase can cache it once that stops being true.
  */
-function trendingScore(item: FeedItem): number {
-  const ageHours = Math.max(0, (Date.now() - new Date(item.activatedAt).getTime()) / (60 * 60 * 1000));
-  const engagement = item.likeCount * 1 + item.commentCount * 1.5 + item.tally.total * 2;
-  // +1/+2 keep a brand-new, zero-engagement card from scoring exactly 0 (so
-  // it still surfaces, just low) and from dividing by a near-zero age.
+function trendingScore(duel: FeedDuel): number {
+  const ageHours = Math.max(0, (Date.now() - new Date(duel.activatedAt).getTime()) / (60 * 60 * 1000));
+  const totalLikes = duel.sides[0].likeCount + duel.sides[1].likeCount;
+  const engagement = totalLikes * 1 + duel.commentCount * 1.5 + duel.tally.total * 2;
+  // +1/+2 keep a brand-new, zero-engagement Duell from scoring exactly 0
+  // (so it still surfaces, just low) and from dividing by a near-zero age.
   return (engagement + 1) / Math.pow(ageHours + 2, 1.3);
 }
 
-export type FeedPage = { items: FeedItem[]; total: number };
+export type FeedPage = { items: FeedDuel[]; total: number };
 
-/** "Für dich" — every live/finished Pitch, ranked by a live trending score. */
+/** "Feed" — every live/finished Duell, ranked by a live trending score. */
 export async function getForYouFeed(viewerId: string | null, offset = 0, limit = 6): Promise<FeedPage> {
-  const items = await buildFeedItems(viewerId);
-  items.sort((a, b) => trendingScore(b) - trendingScore(a));
-  return { items: items.slice(offset, offset + limit), total: items.length };
+  const duels = await buildFeedDuels(viewerId);
+  duels.sort((a, b) => trendingScore(b) - trendingScore(a));
+  return { items: duels.slice(offset, offset + limit), total: duels.length };
 }
 
-/** "Folge ich" — only cards from brands the viewer follows, newest first. */
+/** "Folge ich" — only Duelle where a followed brand is on one of the two sides, newest first. */
 export async function getFollowingFeed(viewerId: string, offset = 0, limit = 6): Promise<FeedPage> {
-  const items = (await buildFeedItems(viewerId)).filter((item) => item.viewerFollowsBrand);
-  items.sort((a, b) => new Date(b.activatedAt).getTime() - new Date(a.activatedAt).getTime());
-  return { items: items.slice(offset, offset + limit), total: items.length };
+  const followedBrandIds = await getFollowedBrandIds(viewerId);
+  if (followedBrandIds.length === 0) return { items: [], total: 0 };
+  const followedSet = new Set(followedBrandIds);
+  const duels = (await buildFeedDuels(viewerId)).filter(
+    (duel) => followedSet.has(duel.sides[0].brandId) || followedSet.has(duel.sides[1].brandId),
+  );
+  duels.sort((a, b) => new Date(b.activatedAt).getTime() - new Date(a.activatedAt).getTime());
+  return { items: duels.slice(offset, offset + limit), total: duels.length };
 }

@@ -356,6 +356,65 @@ follow just posted.
 - **Deliberately out of scope:** an in-app friends/DM system for "Teilen" (see
   above), any persisted/cached trending score, and video transcoding/thumbnailing
   (unchanged from Phase 3 — still relying on the browser's own `<video>` decoding).
+- **Superseded by Phase 9.1, immediately below:** the "one card per battle side"
+  design and the "Für dich" tab name. Kept here as a record of what shipped first
+  and why; read on for what changed and why.
+
+**Phase 9.1 — one feed entry per Duell, not per side (and no more "Für dich"):**
+
+User feedback on Phase 9, verbatim: *"Ja es darf aber keine Kopie sein, du musst
+es neu machen damit wir keine Probleme bekommen. Zum Beispiel statt for you,
+Feed. Grundsätzlich: machst du einfach nur das was ich schreibe oder überlegst du
+auch selber wie du das findest? [...] Ein User öffnet die App, er möchte neue
+Videos von den Firmen sehen, das ist der Feed. Wie sieht man dann ein Duell
+Pitch? [...] Hast du Lösungen?"* Two real problems, not one:
+
+1. **"Für dich" is TikTok's own tab name**, not a generic term — a legal risk for
+   a product whose whole pitch is being an original platform, not a TikTok clone.
+2. **The per-side-card design quietly broke the Duell concept.** A feed is one
+   video at a time; splitting a battle into two independent cards meant a viewer
+   could scroll past brand A's video, never see brand B's, and never get a
+   moment where voting "on this Duell" actually made sense — the feed showed
+   videos, not Duelle.
+
+Fix, chosen from three options put to the user (`AskUserQuestion`; picked
+"Swipe zur Antwort"):
+
+- **One feed entry = one Duell**, not one per side. `src/lib/feed.ts`'s
+  `buildFeedDuels()` replaces the old `buildFeedItems()`: a `FeedDuel` now
+  carries `sides: [FeedDuelSide, FeedDuelSide]` (index 0 = brand A, index 1 =
+  brand B, matching `tally.brandAVotes`/`brandBVotes`) plus one shared
+  `commentCount` and `tally` — vertical scroll-snap moves between *different*
+  Duelle, exactly one full-screen video on screen at a time, same as before.
+- **Flipping to the other side happens in place**, without leaving that feed
+  position: `FeedDuelCard` mounts both side videos absolutely-stacked (only the
+  active one visible/playing, the other paused-but-loaded so switching is
+  instant, no reload, no flicker) and switches on a tap-zone (left third /
+  right third of the screen = that side, middle third = mute toggle — chosen
+  deliberately as a new, two-state mechanic rather than reusing any specific
+  existing app's story-paging UI) or the explicit "↔ Antwort von {brand}
+  ansehen" button under the video. A dot indicator + edge chevrons (‹ ›) show
+  there's a second side to see.
+  Voting, liking and the follow button all act on whichever side is currently
+  shown; liking is still per-side (two hearts, two counts, one per brand),
+  voting and comments are still shared per Duell (one tally, one thread — a
+  vote is "for a side of this Duell", not "for this card").
+- **No separate "Pitches" tab was added.** The user asked about this directly;
+  `/pitches` already lists every Duell (both sides, full vote panel, comments) —
+  the feed's "beide direkt vergleichen" link on every card points there for
+  anyone who wants the non-swipe view instead.
+- **Tab renamed:** "Für dich" → **Feed** (the "Folge ich" tab is unchanged — it
+  now opens each Duell on whichever side the viewer follows, via a new
+  `initialSideIndex`, instead of a separate card per followed brand).
+- `feed-video-card.tsx` (Phase 9's per-side card) is deleted; `feed-duel-card.tsx`
+  replaces it. A `data-battle-id` attribute was added to the card's root element
+  — not a product change, but worth noting: it's what makes the card reliably
+  locatable in tests across a side switch, since class-based selectors on the
+  currently-visible side go stale the moment the side flips.
+- No schema change — the `likes`, `comments`, and `votes` tables and their APIs
+  (`/api/feed/like`, `/api/feed/vote`, `/api/feed/comments`) were already
+  Duell/side-agnostic enough to need no changes, just a client that now points
+  them at whichever side is active.
 
 ## 4. The two-real-inboxes test
 
