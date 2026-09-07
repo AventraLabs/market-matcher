@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { getAllBattles } from "@/lib/battle";
+import { getVoteTotals } from "@/lib/vote";
 
 // Always live data — without this, Next prerenders it once at build time
 // (no dynamic API is used otherwise) and it would never show a battle
@@ -19,6 +20,7 @@ function BrandThumb({ brand }: { brand: { name: string; logoUrl: string | null }
 
 export default async function BattlesPage() {
   const battles = await getAllBattles();
+  const voteTotals = await getVoteTotals(battles.map((b) => b.id));
 
   return (
     <div className="mx-auto w-full max-w-lg flex-1 px-4 py-16">
@@ -44,6 +46,9 @@ export default async function BattlesPage() {
                   <BrandThumb brand={battle.brandB} />
                 </div>
               </Link>
+              <p className="mt-1 text-center text-xs text-zinc-600">
+                {voteTotals.get(battle.id) ?? 0} {(voteTotals.get(battle.id) ?? 0) === 1 ? "Stimme" : "Stimmen"}
+              </p>
             </li>
           ))}
         </ul>

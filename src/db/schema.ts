@@ -188,3 +188,30 @@ export const notifications = pgTable("notifications", {
 
 export type Notification = typeof notifications.$inferSelect;
 export type NewNotification = typeof notifications.$inferInsert;
+
+// Phase 6: votes. One vote per user per battle (unique index below is what
+// actually enforces that — the app checks first for a friendly error, but
+// the constraint is the real backstop). No voting deadline for now: the
+// tally is just live and ongoing, "who's ahead right now" rather than a
+// closed poll — battles.status stays 'active' until a future phase gives a
+// concrete reason to close voting (a season, a fixed window, etc.).
+export const votes = pgTable(
+  "votes",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    battleId: uuid("battle_id")
+      .notNull()
+      .references(() => battles.id, { onDelete: "cascade" }),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    votedForBrandId: uuid("voted_for_brand_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("votes_battle_user_unique_idx").on(table.battleId, table.userId)],
+);
+
+export type Vote = typeof votes.$inferSelect;
+export type NewVote = typeof votes.$inferInsert;

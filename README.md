@@ -3,7 +3,8 @@
 > Werbung wird zum Entertainment.
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
-(video), Phase 4 (challenges), Phase 5 (battle + follow/notify refinements).**
+(video), Phase 4 (challenges), Phase 5 (battle + follow/notify refinements), Phase 6
+(voting).**
 
 **Live:** https://market-matcher-neon.vercel.app
 
@@ -60,6 +61,9 @@ That's enough to test the whole flow solo.
   brand, so they can be notified about that brand's next battle.
 - **notifications** (Phase 5.1) — userId, message, battleId (nullable), readAt,
   createdAt. In-app only for now — see Phase 5.1 notes below.
+- **votes** (Phase 6) — battleId, userId, votedForBrandId, createdAt. Unique index
+  on (battleId, userId) — the real enforcement of one vote per user per battle; the
+  app also checks first for a friendlier error message.
 
 More tables (Vote, ...) get added in later phases, on top of this.
 
@@ -162,8 +166,32 @@ More tables (Vote, ...) get added in later phases, on top of this.
   — closer to how people actually watch vertical video, and leaves room for an
   actual swipe gesture later without a data-model change.
 
-Deliberately out of scope so far: voting itself (Phase 6), any ranking/ELO, and
-per-battle dedicated video (see the challenge-window note above).
+**Phase 6 — voting:**
+
+- `/battles/[id]` now has a "WER HAT GEWONNEN?" panel below the video viewer: two
+  vote buttons before you've voted, a live percentage bar for each brand (with a 👑
+  on whoever's ahead) after you have. One vote per logged-in user per battle,
+  enforced by a unique DB index (`src/db/schema.ts`) — `castVote` in
+  `src/app/actions/vote.ts` also checks first, for a clean error message instead of
+  a raw constraint violation.
+- A brand's own team (checked via `brand_members`) can't vote in its own battle —
+  otherwise a brand could just vote itself to the top. Logged-out visitors see the
+  live tally and a "Anmelden, um abzustimmen" prompt instead of vote buttons.
+- **No voting deadline.** `battles.status` stays `'active'` — the tally is live and
+  ongoing ("who's ahead right now"), not a poll that closes and locks in a winner.
+  That's a deliberate simplification: the original idea of flipping to `'finished'`
+  (mentioned in the Phase 5 notes above) would need a real reason to pick a closing
+  rule — a fixed season, a per-battle expiry — and nothing in the current product
+  called for one yet. Easy to add later without a schema change (`battles.status`
+  is already there, just unused).
+- `/battles` shows a vote-count badge per battle card, so there's a reason to check
+  back on a battle you haven't voted in yet.
+- Tested for the classic edge cases: an exact 50/50 split renders as two 50% bars
+  with no 👑 on either side (not a crash or a false "leader"), and a single vote
+  flips the 👑 correctly once the tie breaks.
+
+Deliberately out of scope so far: any ranking/ELO across battles, a voting deadline
+(see above), and per-battle dedicated video (see the Phase 5.1 challenge-window note).
 
 ## 4. The two-real-inboxes test
 
