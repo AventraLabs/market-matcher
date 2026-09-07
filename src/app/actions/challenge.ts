@@ -3,10 +3,11 @@
 import { eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { db } from "@/db";
-import { battles, challenges } from "@/db/schema";
+import { battles, brands, challenges, notifications, type NewNotification } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
 import { CHALLENGE_WINDOW_MS, effectiveStatus, getLivePendingChallengeBetween } from "@/lib/challenge";
+import { getFollowerUserIds } from "@/lib/follow";
 
 export type ChallengeFormState = { error?: string } | undefined;
 
@@ -67,7 +68,7 @@ export async function respondToChallenge(_prevState: RespondFormState, formData:
   if (status === "expired") {
     // Persist the expiry so it stops showing up as actionable.
     await db.update(challenges).set({ status: "expired" }).where(eq(challenges.id, challengeId));
-    return { error: "Diese Herausforderung ist abgelaufen (24h vorbei)." };
+    return { error: "Diese Herausforderung ist abgelaufen — das Zeitfenster ist vorbei." };
   }
   if (status !== "pending") {
     return { error: "Auf diese Herausforderung wurde bereits reagiert." };
@@ -79,15 +80,57 @@ export async function respondToChallenge(_prevState: RespondFormState, formData:
     .where(eq(challenges.id, challengeId));
 
   // Phase 5: accepting a challenge is what turns it into a battle — the
-  // page that shows both brands' content side by side.
+  // page that shows both brands' content head to head.
   if (decision === "accept") {
-    await db.insert(battles).values({
-      challengeId: challenge.id,
-      brandAId: challenge.challengerBrandId,
-      brandBId: challenge.challengedBrandId,
-    });
+    const [battle] = await db
+      .insert(battles)
+      .values({
+        challengeId: challenge.id,
+        brandAId: challenge.challengerBrandId,
+        brandBId: challenge.challengedBrandId,
+      })
+      .returning();
+
+    await notifyFollowersOfNewBattle(battle.id, challenge.challengerBrandId, challenge.challengedBrandId);
   }
 
   refresh();
   return undefined;
+}
+
+/**
+ * Phase 5.1: tell everyone following either brand that their battle just
+ * went live — so they hear about it without having to keep checking back.
+ * Someone following both brands gets two notifications (one per side);
+ * that's an acceptable rough edge for now rather than special-casing it.
+ */
+async function notifyFollowersOfNewBattle(battleId: string, challengerBrandId: string, challengedBrandId: string) {
+  const [challengerBrand, challengedBrand] = await Promise.all([
+    db.select({ name: brands.name }).from(brands).where(eq(brands.id, challengerBrandId)).limit(1),
+    db.select({ name: brands.name }).from(brands).where(eq(brands.id, challengedBrandId)).limit(1),
+  ]);
+  const challengerName = challengerBrand[0]?.name ?? "Eine Marke";
+  const challengedName = challengedBrand[0]?.name ?? "eine Marke";
+
+  const [challengerFollowers, challengedFollowers] = await Promise.all([
+    getFollowerUserIds(challengerBrandId),
+    getFollowerUserIds(challengedBrandId),
+  ]);
+
+  const rows: NewNotification[] = [
+    ...challengerFollowers.map((userId) => ({
+      userId,
+      message: `⚔️ ${challengerName} battelt jetzt gegen ${challengedName}!`,
+      battleId,
+    })),
+    ...challengedFollowers.map((userId) => ({
+      userId,
+      message: `⚔️ ${challengedName} battelt jetzt gegen ${challengerName}!`,
+      battleId,
+    })),
+  ];
+
+  if (rows.length > 0) {
+    await db.insert(notifications).values(rows);
+  }
 }

@@ -3,7 +3,7 @@
 > Werbung wird zum Entertainment.
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
-(video), Phase 4 (challenges), Phase 5 (battle).**
+(video), Phase 4 (challenges), Phase 5 (battle + follow/notify refinements).**
 
 **Live:** https://market-matcher-neon.vercel.app
 
@@ -49,12 +49,17 @@ That's enough to test the whole flow solo.
   brand's actual battle submissions get their own table once Phase 5 needs it; this
   is just "the video on my public profile" for now.
 - **challenges** (Phase 4) — challengerBrandId, challengedBrandId, status
-  (pending/accepted/declined/expired), expiresAt (createdAt + 24h), respondedAt,
-  timestamps. Partial unique index on (challenger, challenged) WHERE status='pending'.
+  (pending/accepted/declined/expired), expiresAt (createdAt + `CHALLENGE_WINDOW_MS`,
+  2 weeks by default — see Phase 5.1 below), respondedAt, timestamps. Partial unique
+  index on (challenger, challenged) WHERE status='pending'.
 - **battles** (Phase 5) — challengeId (unique — one battle per accepted challenge),
   brandAId, brandBId, status ('active' for now), createdAt. Still uses each brand's
   `videoUrl` from Phase 3 rather than a separate per-battle submission — that split
   only matters once a brand needs different content per battle, which isn't yet.
+- **follows** (Phase 5.1) — userId + brandId, unique per pair. A user following a
+  brand, so they can be notified about that brand's next battle.
+- **notifications** (Phase 5.1) — userId, message, battleId (nullable), readAt,
+  createdAt. In-app only for now — see Phase 5.1 notes below.
 
 More tables (Vote, ...) get added in later phases, on top of this.
 
@@ -129,7 +134,36 @@ More tables (Vote, ...) get added in later phases, on top of this.
 - `battles.status` defaults to `'active'` — unused until Phase 6, which is what will
   flip it to `'finished'` once voting closes.
 
-Deliberately out of scope so far: voting itself (Phase 6) and any ranking/ELO.
+**Phase 5.1 — refinements (product feedback, before Phase 6):**
+
+- **Challenge window extended 24h → 2 weeks.** No brand can shoot a real marketing
+  video in a day, and a brand fielding several challenges at once needs even more
+  room, not less. `CHALLENGE_WINDOW_MS` in `src/lib/challenge.ts` is the one place
+  this is tuned — currently 14 days as a starting assumption. Note: accepting a
+  challenge today still immediately creates the battle using each brand's existing
+  showcase video (see the `battles` note above) rather than opening a dedicated
+  production window per battle — that's the more accurate long-term fix if 2 weeks
+  ever turns out to still be too tight, but it's a bigger schema change (per-battle
+  video + its own deadline) than today's ask called for, so it's flagged here rather
+  than half-built.
+- **Follow + notify.** `/brands/[slug]` now shows a follower count and a
+  Folgen/Folgt-Button (hidden for your own brand, and for logged-out visitors, who
+  still see the count). The moment a challenge is accepted, everyone following
+  *either* brand gets an in-app notification ("Battle Cola battelt jetzt gegen
+  Battle Fanta!") shown on `/profile`, linking straight to the battle. No
+  push/email yet — a follower has to open the app and check `/profile` to see it;
+  that's the natural next step once real users are testing this beyond one device.
+  A user following both brands in a battle currently gets two notifications rather
+  than one merged one — a deliberate rough edge, not a bug.
+- **Battle page redesigned as a single-video viewer, not side-by-side.** Two 9:16
+  videos next to each other left almost nothing visible on a phone. `/battles/[id]`
+  now shows one brand's video at a time (`BattleViewer` in
+  `src/components/battle/battle-viewer.tsx`) with a tab bar to flip between the two
+  — closer to how people actually watch vertical video, and leaves room for an
+  actual swipe gesture later without a data-model change.
+
+Deliberately out of scope so far: voting itself (Phase 6), any ranking/ELO, and
+per-battle dedicated video (see the challenge-window note above).
 
 ## 4. The two-real-inboxes test
 

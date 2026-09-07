@@ -89,10 +89,12 @@ export const brandMembers = pgTable(
 export type Brand = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;
 
-// Phase 4: challenges. Brand A challenges Brand B; Brand B has 24h to
-// accept or decline. Expiry is computed at read time (challengeStatus()
-// in src/lib/challenge.ts) rather than via a cron job — simpler, and
-// correct regardless of how long it's been since anyone looked.
+// Phase 4: challenges. Brand A challenges Brand B; Brand B has a window to
+// accept or decline (see CHALLENGE_WINDOW_MS in src/lib/challenge.ts — 2
+// weeks by default, long enough to actually produce a video). Expiry is
+// computed at read time (effectiveStatus() in src/lib/challenge.ts) rather
+// than via a cron job — simpler, and correct regardless of how long it's
+// been since anyone looked.
 export const challenges = pgTable(
   "challenges",
   {
@@ -147,3 +149,42 @@ export const battles = pgTable(
 
 export type Battle = typeof battles.$inferSelect;
 export type NewBattle = typeof battles.$inferInsert;
+
+// Phase 5.1: follows. A user follows a brand to get notified when that
+// brand's next battle kicks off — separate from brand_members, which is
+// about who *runs* a brand, not who watches it.
+export const follows = pgTable(
+  "follows",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    userId: uuid("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
+    brandId: uuid("brand_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("follows_user_brand_unique_idx").on(table.userId, table.brandId)],
+);
+
+export type Follow = typeof follows.$inferSelect;
+export type NewFollow = typeof follows.$inferInsert;
+
+// Phase 5.1: notifications. In-app only for now (no push/email infra for
+// this yet — see README). Created for every follower of either brand the
+// moment a challenge is accepted, so "someone I follow is about to battle"
+// doesn't require anyone to keep checking back.
+export const notifications = pgTable("notifications", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  message: text("message").notNull(),
+  battleId: uuid("battle_id").references(() => battles.id, { onDelete: "cascade" }),
+  readAt: timestamp("read_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Notification = typeof notifications.$inferSelect;
+export type NewNotification = typeof notifications.$inferInsert;

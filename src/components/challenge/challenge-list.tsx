@@ -34,8 +34,14 @@ function StatusBadge({ status, battleId }: { status: string; battleId?: string |
   );
 }
 
-function hoursLeft(expiresAt: Date): number {
-  return Math.max(0, Math.ceil((expiresAt.getTime() - Date.now()) / (60 * 60 * 1000)));
+/** "Noch 12 Tage" once there's more than a day left, "Noch 6h" once it's close. */
+function timeLeftLabel(expiresAt: Date): string {
+  const msLeft = Math.max(0, expiresAt.getTime() - Date.now());
+  const hoursLeft = msLeft / (60 * 60 * 1000);
+  if (hoursLeft >= 24) {
+    return `Noch ${Math.ceil(hoursLeft / 24)} Tage`;
+  }
+  return `Noch ${Math.max(1, Math.ceil(hoursLeft))}h`;
 }
 
 function BrandChip({ brand }: { brand: ChallengeWithBrand["otherBrand"] }) {
@@ -67,7 +73,7 @@ export function IncomingChallengeList({ challenges }: { challenges: ChallengeWit
             <div>
               <BrandChip brand={c.otherBrand} />
               {status === "pending" ? (
-                <p className="mt-1 text-xs text-zinc-500">Noch {hoursLeft(c.expiresAt)}h zum Antworten</p>
+                <p className="mt-1 text-xs text-zinc-500">{timeLeftLabel(c.expiresAt)} zum Antworten</p>
               ) : (
                 <div className="mt-1">
                   <StatusBadge status={status} battleId={c.battleId} />
@@ -95,7 +101,7 @@ export function OutgoingChallengeList({ challenges }: { challenges: ChallengeWit
             <BrandChip brand={c.otherBrand} />
             <div className="text-right">
               <StatusBadge status={status} battleId={c.battleId} />
-              {status === "pending" && <p className="mt-1 text-xs text-zinc-500">Noch {hoursLeft(c.expiresAt)}h</p>}
+              {status === "pending" && <p className="mt-1 text-xs text-zinc-500">{timeLeftLabel(c.expiresAt)}</p>}
             </div>
           </li>
         );

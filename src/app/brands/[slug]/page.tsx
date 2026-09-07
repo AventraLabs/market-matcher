@@ -4,9 +4,16 @@ import { db } from "@/db";
 import { brands } from "@/db/schema";
 import { VideoPlayer } from "@/components/brand/video-player";
 import { ChallengeButton } from "@/components/challenge/challenge-button";
+import { FollowButton } from "@/components/brand/follow-button";
 import { getOptionalUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
 import { getLivePendingChallengeBetween } from "@/lib/challenge";
+import { getFollowerCount, isFollowing } from "@/lib/follow";
+
+// Note: this page already reads the session (getOptionalUser -> auth(),
+// which touches cookies), so Next treats it as dynamic automatically —
+// unlike /brands and /battles, no explicit `dynamic = "force-dynamic"`
+// is needed here.
 
 const COUNTRY_LABELS: Record<string, string> = {
   AT: "Österreich",
@@ -24,8 +31,11 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
   const viewer = await getOptionalUser();
   const viewerBrand = viewer ? await getBrandForUser(viewer.id) : null;
   const isOwnBrand = viewerBrand?.id === brand.id;
-  const livePending =
-    viewerBrand && !isOwnBrand ? await getLivePendingChallengeBetween(viewerBrand.id, brand.id) : null;
+  const [livePending, followerCount, viewerFollows] = await Promise.all([
+    viewerBrand && !isOwnBrand ? getLivePendingChallengeBetween(viewerBrand.id, brand.id) : null,
+    getFollowerCount(brand.id),
+    viewer && !isOwnBrand ? isFollowing(viewer.id, brand.id) : false,
+  ]);
 
   return (
     <div className="mx-auto w-full max-w-lg flex-1 px-4 py-16">
@@ -49,8 +59,15 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
                 {COUNTRY_LABELS[brand.country] ?? brand.country}
               </span>
             </div>
+            <p className="mt-1 text-xs text-zinc-500">{followerCount} Follower</p>
           </div>
         </div>
+
+        {viewer && !isOwnBrand && (
+          <div className="mt-4">
+            <FollowButton brandId={brand.id} isFollowing={viewerFollows} />
+          </div>
+        )}
 
         {brand.description && <p className="mt-6 text-sm leading-relaxed text-zinc-300">{brand.description}</p>}
 

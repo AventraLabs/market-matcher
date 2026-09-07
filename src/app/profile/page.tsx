@@ -11,15 +11,22 @@ import { CreateBrandForm } from "@/components/brand/create-brand-form";
 import { VideoUploadForm } from "@/components/brand/video-upload-form";
 import { VideoPlayer } from "@/components/brand/video-player";
 import { IncomingChallengeList, OutgoingChallengeList } from "@/components/challenge/challenge-list";
+import { NotificationList } from "@/components/notification/notification-list";
 import { getIncomingChallenges, getOutgoingChallenges } from "@/lib/challenge";
+import { getNotificationsForUser } from "@/lib/notification";
+
+// This page reads challenges, notifications etc. below via requireUser()
+// -> auth() (cookies), so it's already dynamic — no explicit flag needed.
 
 export default async function ProfilePage() {
   const sessionUser = await requireUser();
   const [user] = await db.select().from(users).where(eq(users.id, sessionUser.id)).limit(1);
   const brand = await getBrandForUser(sessionUser.id);
-  const [incomingChallenges, outgoingChallenges] = brand
-    ? await Promise.all([getIncomingChallenges(brand.id), getOutgoingChallenges(brand.id)])
-    : [[], []];
+  const [incomingChallenges, outgoingChallenges, recentNotifications] = await Promise.all([
+    brand ? getIncomingChallenges(brand.id) : Promise.resolve([]),
+    brand ? getOutgoingChallenges(brand.id) : Promise.resolve([]),
+    getNotificationsForUser(sessionUser.id),
+  ]);
 
   if (!user) {
     // Session refers to a user that no longer exists in the DB — shouldn't
@@ -70,6 +77,13 @@ export default async function ProfilePage() {
           </div>
         )}
       </div>
+
+      {recentNotifications.length > 0 && (
+        <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
+          <h2 className="mb-4 text-lg font-semibold text-white">Benachrichtigungen</h2>
+          <NotificationList notifications={recentNotifications} />
+        </div>
+      )}
 
       <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
         <h2 className="mb-4 text-lg font-semibold text-white">Meine Marke</h2>
