@@ -52,19 +52,19 @@ export async function uploadBattleVideo(
 
   const [battle] = await db.select().from(battles).where(eq(battles.id, battleId)).limit(1);
   if (!battle) {
-    return { error: "Dieses Battle existiert nicht." };
+    return { error: "Dieser Pitch existiert nicht." };
   }
 
   const isA = battle.brandAId === myBrand.id;
   const isB = battle.brandBId === myBrand.id;
   if (!isA && !isB) {
-    return { error: "Das ist nicht dein Battle." };
+    return { error: "Das ist nicht dein Pitch." };
   }
   if ((isA && battle.brandAVideoUrl) || (isB && battle.brandBVideoUrl)) {
-    return { error: "Du hast für dieses Battle bereits ein Video hochgeladen." };
+    return { error: "Du hast für diesen Pitch bereits ein Video hochgeladen." };
   }
   if (battle.productionDeadline && battle.productionDeadline.getTime() < Date.now()) {
-    return { error: "Die Frist für dieses Battle ist abgelaufen." };
+    return { error: "Die Frist für diesen Pitch ist abgelaufen." };
   }
 
   const validated = validateVideoFile(formData);
@@ -107,20 +107,20 @@ export async function counterWithVideo(_prevState: CounterFormState, formData: F
 
   const myBrand = await getBrandForUser(user.id);
   if (!myBrand) {
-    return { error: "Du musst zuerst eine Marke erstellen, um zu kontern." };
+    return { error: "Du musst zuerst eine Marke erstellen, um zu antworten." };
   }
   if (myBrand.id === targetBrandId) {
-    return { error: "Du kannst deine eigene Marke nicht kontern." };
+    return { error: "Du kannst deine eigene Marke nicht selbst beantworten." };
   }
 
   const [targetBrand] = await db.select().from(brands).where(eq(brands.id, targetBrandId)).limit(1);
   if (!targetBrand || !targetBrand.videoUrl) {
-    return { error: "Diese Marke hat noch kein Video zum Kontern." };
+    return { error: "Diese Marke hat noch kein Video zum Antworten." };
   }
 
   const existing = await getExistingOpenBattle(targetBrandId, myBrand.id);
   if (existing) {
-    return { error: "Du hast diese Marke bereits gekontert." };
+    return { error: "Du hast auf diese Marke bereits geantwortet." };
   }
 
   const validated = validateVideoFile(formData);
@@ -152,5 +152,5 @@ export async function counterWithVideo(_prevState: CounterFormState, formData: F
 
   // Straight to the new battle — the countering brand should see their
   // shot land immediately, not just a success message on the old page.
-  redirect(`/battles/${battle.id}`);
+  redirect(`/pitches/${battle.id}`);
 }

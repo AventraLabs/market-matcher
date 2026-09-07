@@ -66,7 +66,7 @@ export async function getOutgoingChallenges(brandId: string): Promise<ChallengeW
 
 /**
  * Is there already a live (pending, unexpired) challenge between these two
- * brands, in either direction? Used to grey out the "Herausfordern" button
+ * brands, in either direction? Used to grey out the "Einladen" button
  * and to stop someone from firing off duplicate challenges.
  */
 export async function getLivePendingChallengeBetween(brandAId: string, brandBId: string) {

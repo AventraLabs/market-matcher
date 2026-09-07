@@ -20,10 +20,10 @@ function StatusBadge({ status, battleId }: { status: string; battleId?: string |
   if (status === "accepted" && battleId) {
     return (
       <Link
-        href={`/battles/${battleId}`}
+        href={`/pitches/${battleId}`}
         className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/20"
       >
-        Battle ansehen →
+        Pitch ansehen →
       </Link>
     );
   }
@@ -62,7 +62,7 @@ function BrandChip({ brand }: { brand: ChallengeWithBrand["otherBrand"] }) {
 
 export function IncomingChallengeList({ challenges }: { challenges: ChallengeWithBrand[] }) {
   if (challenges.length === 0) {
-    return <p className="text-sm text-zinc-500">Noch keine Herausforderungen erhalten.</p>;
+    return <p className="text-sm text-zinc-500">Noch keine Einladungen erhalten.</p>;
   }
   return (
     <ul className="space-y-3">
@@ -90,7 +90,7 @@ export function IncomingChallengeList({ challenges }: { challenges: ChallengeWit
 
 export function OutgoingChallengeList({ challenges }: { challenges: ChallengeWithBrand[] }) {
   if (challenges.length === 0) {
-    return <p className="text-sm text-zinc-500">Noch keine Herausforderungen gesendet.</p>;
+    return <p className="text-sm text-zinc-500">Noch keine Einladungen gesendet.</p>;
   }
   return (
     <ul className="space-y-3">

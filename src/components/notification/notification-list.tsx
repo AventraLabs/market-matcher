@@ -51,7 +51,7 @@ export function NotificationList({ notifications }: { notifications: Notificatio
           return (
             <li key={n.id}>
               {n.battleId ? (
-                <Link href={`/battles/${n.battleId}`} className="block hover:opacity-80">
+                <Link href={`/pitches/${n.battleId}`} className="block hover:opacity-80">
                   {content}
                 </Link>
               ) : (

@@ -11,7 +11,7 @@ export function ChallengeButton({ challengedBrandId }: { challengedBrandId: stri
     <form action={action} className="mt-6">
       <input type="hidden" name="challengedBrandId" value={challengedBrandId} />
       <FormError message={state?.error} />
-      <SubmitButton>Herausfordern</SubmitButton>
+      <SubmitButton>Einladen</SubmitButton>
     </form>
   );
 }

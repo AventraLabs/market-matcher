@@ -4,9 +4,11 @@ import { getBattleStage } from "@/lib/battle-stage";
 import { BattleViewer } from "@/components/battle/battle-viewer";
 import { VotePanel } from "@/components/battle/vote-panel";
 import { BattleVideoUploadForm } from "@/components/battle/battle-video-upload-form";
+import { CommentSection } from "@/components/battle/comment-section";
 import { getOptionalUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
 import { getUserVote, getVoteTally } from "@/lib/vote";
+import { getCommentsForBattle } from "@/lib/comment";
 
 function timeLeftLabel(date: Date): string {
   const hoursLeft = Math.max(0, (date.getTime() - Date.now()) / (60 * 60 * 1000));
@@ -14,7 +16,7 @@ function timeLeftLabel(date: Date): string {
   return `${Math.max(1, Math.ceil(hoursLeft))}h`;
 }
 
-export default async function BattlePage({ params }: { params: Promise<{ id: string }> }) {
+export default async function PitchPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const battle = await getBattleById(id);
   if (!battle) notFound();
@@ -22,7 +24,10 @@ export default async function BattlePage({ params }: { params: Promise<{ id: str
   const { videoUrlA, videoUrlB } = resolveBattleVideos(battle);
   const viewer = await getOptionalUser();
   const viewerBrand = viewer ? await getBrandForUser(viewer.id) : null;
-  const tally = await getVoteTally(battle.id, battle.brandAId, battle.brandBId);
+  const [tally, comments] = await Promise.all([
+    getVoteTally(battle.id, battle.brandAId, battle.brandBId),
+    getCommentsForBattle(battle.id),
+  ]);
 
   const stage = getBattleStage(
     {
@@ -64,7 +69,7 @@ export default async function BattlePage({ params }: { params: Promise<{ id: str
             <p className="mb-4 text-xs text-zinc-600">Frist: noch {timeLeftLabel(stage.deadline)}</p>
           )}
           <p className="text-xs text-zinc-600">
-            Videos bleiben unsichtbar, bis beide Seiten geliefert haben — erst dann startet das Battle.
+            Videos bleiben unsichtbar, bis beide Seiten geliefert haben — erst dann startet der Pitch.
           </p>
           {isOwnBrandA && !videoUrlA && <BattleVideoUploadForm battleId={battle.id} />}
           {isOwnBrandB && !videoUrlB && <BattleVideoUploadForm battleId={battle.id} />}
@@ -118,11 +123,13 @@ export default async function BattlePage({ params }: { params: Promise<{ id: str
           )}
           {stage.resolution === "no_show" && (
             <p className="mx-auto mt-6 max-w-[380px] rounded-xl border border-zinc-800 p-4 text-center text-sm text-zinc-500">
-              Keine Seite hat rechtzeitig ein Video hochgeladen — dieses Battle wurde nicht ausgetragen.
+              Keine Seite hat rechtzeitig ein Video hochgeladen — dieser Pitch kam nicht zustande.
             </p>
           )}
         </>
       )}
+
+      <CommentSection battleId={battle.id} comments={comments} isLoggedIn={Boolean(viewer)} />
     </div>
   );
 }

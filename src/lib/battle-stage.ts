@@ -98,12 +98,12 @@ async function notifyFollowersOfLiveBattle(battleId: string, brandAId: string, b
   const rows: NewNotification[] = [
     ...brandAFollowers.map((userId) => ({
       userId,
-      message: `⚔️ ${brandAName} battelt jetzt gegen ${brandBName} — jetzt abstimmen!`,
+      message: `🎤 Pitch live: ${brandAName} vs. ${brandBName} — jetzt abstimmen!`,
       battleId,
     })),
     ...brandBFollowers.map((userId) => ({
       userId,
-      message: `⚔️ ${brandBName} battelt jetzt gegen ${brandAName} — jetzt abstimmen!`,
+      message: `🎤 Pitch live: ${brandBName} vs. ${brandAName} — jetzt abstimmen!`,
       battleId,
     })),
   ];

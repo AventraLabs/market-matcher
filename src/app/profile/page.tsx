@@ -52,6 +52,14 @@ export default async function ProfilePage() {
             <dd className="text-white">{user.email}</dd>
           </div>
           <div className="flex justify-between">
+            <dt className="text-zinc-400">Rolle</dt>
+            <dd>
+              <span className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-400">
+                {user.accountType === "acro" ? "Acro" : "Assent"}
+              </span>
+            </dd>
+          </div>
+          <div className="flex justify-between">
             <dt className="text-zinc-400">Status</dt>
             <dd>
               {user.emailVerifiedAt ? (
@@ -104,8 +112,20 @@ export default async function ProfilePage() {
               </Link>
             </div>
           </div>
-        ) : (
+        ) : user.accountType === "acro" ? (
           <CreateBrandForm />
+        ) : (
+          <div className="text-sm text-zinc-400">
+            <p>Als Assent hast du keine eigene Marke — du schaust zu, folgst und stimmst ab.</p>
+            <div className="mt-3 flex gap-4">
+              <Link href="/pitches" className="text-orange-500 hover:underline">
+                Pitches ansehen →
+              </Link>
+              <Link href="/brands" className="text-orange-500 hover:underline">
+                Marken entdecken →
+              </Link>
+            </div>
+          </div>
         )}
       </div>
 
@@ -123,7 +143,7 @@ export default async function ProfilePage() {
 
       {brand && (
         <div className="mb-8 rounded-2xl border border-zinc-800 bg-zinc-950 p-6">
-          <h2 className="mb-4 text-lg font-semibold text-white">Herausforderungen</h2>
+          <h2 className="mb-4 text-lg font-semibold text-white">Einladungen</h2>
           <div className="mb-6">
             <h3 className="mb-2 text-sm font-medium text-zinc-400">Eingehend</h3>
             <IncomingChallengeList challenges={incomingChallenges} />

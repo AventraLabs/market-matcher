@@ -247,6 +247,39 @@ Direct follow-up to product feedback after Phase 6 — three changes, all in
 Deliberately out of scope: any ranking/ELO across battles, and a category picker
 (there's one fixed category for now — see `PITCH_CATEGORY`).
 
+**Phase 8 — roles (Acro/Assent) and a friendlier vocabulary:**
+
+Product feedback: "Battle/Herausfordern/Kontern" reads as combat, not as a stage for
+the best marketing pitch, and every user was implicitly a brand — there was no way to
+just watch and vote without also being able to post. Two changes, both purely
+additive (no battle-stage logic touched):
+
+- **Roles.** `users.accountType` is `'acro'` (a brand — posts pitches, invites,
+  replies) or `'assent'` (watches, follows, votes — can never own a brand). Chosen
+  once at registration (`RegisterForm`'s role picker), no UI to switch later yet.
+  The only enforcement point is `createBrand` (`src/app/actions/brand.ts`) — every
+  other Acro-only action already requires a brand via `getBrandForUser`, so gating
+  brand creation gates everything downstream for free. Existing accounts were
+  backfilled by the migration: anyone already in `brand_members` became `'acro'`,
+  everyone else `'assent'`.
+- **Renamed UI vocabulary** (internal code — table/column names, `battle.ts`,
+  `/app/actions/battle.ts`, etc. — deliberately untouched, this was a copy + routing
+  pass, not a rewrite):
+  - "Battle" → **Pitch**. `/battles` and `/battles/[id]` are now `/pitches` and
+    `/pitches/[id]`.
+  - "Herausfordern" (challenge) → **Einladen** (invite). "Annehmen"/"Ablehnen"
+    (accept/decline) are unchanged.
+  - "Kontern" (counter) → **Antworten** (reply) — the ⚔️ is gone.
+  - Earlier phase notes above still say "Herausfordern"/"Battle"/"Kontern" since
+    that's what the UI said when each phase shipped — this section is the one place
+    documenting the rename itself.
+- **Comments.** A flat, TikTok/Reels-style comment thread under every Pitch
+  (`comments` table, `src/lib/comment.ts`, `src/app/actions/comment.ts`,
+  `CommentSection` component) — newest first, anyone signed in can post (Acro or
+  Assent, including a Pitch's own brands), visible at every stage including
+  `awaiting_videos`. No edit/delete UI yet, no nested replies — a known rough edge,
+  not a blocker for testing whether comments add anything.
+
 ## 4. The two-real-inboxes test
 
 This is the test described for Phase 1 — two different people, two real inboxes,

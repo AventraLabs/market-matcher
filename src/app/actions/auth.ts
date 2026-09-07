@@ -38,7 +38,7 @@ export async function registerUser(_prevState: FormState, formData: FormData): P
   if (!parsed.success) {
     return { errors: parsed.error.flatten().fieldErrors };
   }
-  const { name, email, password } = parsed.data;
+  const { name, email, password, accountType } = parsed.data;
 
   const [existing] = await db.select({ id: users.id }).from(users).where(eq(users.email, email)).limit(1);
   if (existing) {
@@ -48,7 +48,7 @@ export async function registerUser(_prevState: FormState, formData: FormData): P
   const passwordHash = await hashPassword(password);
   const [user] = await db
     .insert(users)
-    .values({ email, passwordHash, name: name || null })
+    .values({ email, passwordHash, name: name || null, accountType })
     .returning({ id: users.id, email: users.email });
 
   await issueVerificationToken(user.id, user.email);

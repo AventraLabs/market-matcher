@@ -21,15 +21,15 @@ export async function sendChallenge(_prevState: ChallengeFormState, formData: Fo
 
   const myBrand = await getBrandForUser(user.id);
   if (!myBrand) {
-    return { error: "Du musst zuerst eine Marke erstellen, um herauszufordern." };
+    return { error: "Du musst zuerst eine Marke erstellen, um einzuladen." };
   }
   if (myBrand.id === challengedBrandId) {
-    return { error: "Du kannst deine eigene Marke nicht herausfordern." };
+    return { error: "Du kannst deine eigene Marke nicht einladen." };
   }
 
   const existing = await getLivePendingChallengeBetween(myBrand.id, challengedBrandId);
   if (existing) {
-    return { error: "Zwischen euch läuft bereits eine offene Herausforderung." };
+    return { error: "Zwischen euch läuft bereits eine offene Einladung." };
   }
 
   await db.insert(challenges).values({
@@ -61,17 +61,17 @@ export async function respondToChallenge(_prevState: RespondFormState, formData:
 
   const [challenge] = await db.select().from(challenges).where(eq(challenges.id, challengeId)).limit(1);
   if (!challenge || challenge.challengedBrandId !== myBrand.id) {
-    return { error: "Diese Herausforderung existiert nicht für deine Marke." };
+    return { error: "Diese Einladung existiert nicht für deine Marke." };
   }
 
   const status = effectiveStatus(challenge);
   if (status === "expired") {
     // Persist the expiry so it stops showing up as actionable.
     await db.update(challenges).set({ status: "expired" }).where(eq(challenges.id, challengeId));
-    return { error: "Diese Herausforderung ist abgelaufen — das Zeitfenster ist vorbei." };
+    return { error: "Diese Einladung ist abgelaufen — das Zeitfenster ist vorbei." };
   }
   if (status !== "pending") {
-    return { error: "Auf diese Herausforderung wurde bereits reagiert." };
+    return { error: "Auf diese Einladung wurde bereits reagiert." };
   }
 
   await db

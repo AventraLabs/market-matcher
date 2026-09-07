@@ -41,13 +41,13 @@ export default async function Home() {
         <Link href="/brands" className="text-orange-500 hover:underline">
           Marken entdecken →
         </Link>
-        <Link href="/battles" className="text-orange-500 hover:underline">
-          Battles ansehen →
+        <Link href="/pitches" className="text-orange-500 hover:underline">
+          Pitches ansehen →
         </Link>
       </div>
 
       <p className="mt-16 text-xs text-zinc-600">
-        Phase 1-7 — Accounts, Marken, Video, Challenges, Battle, Voting, Kontern.
+        Phase 1-8 — Accounts, Marken, Video, Einladen, Pitch, Voting, Antworten, Rollen, Kommentare.
       </p>
     </div>
   );

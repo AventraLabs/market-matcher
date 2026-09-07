@@ -31,16 +31,16 @@ function StageBadge({ stage }: { stage: ReturnType<typeof getBattleStage>["stage
   return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>{label}</span>;
 }
 
-export default async function BattlesPage() {
+export default async function PitchesPage() {
   const battles = await getAllBattles();
   const voteTotals = await getVoteTotals(battles.map((b) => b.id));
 
   return (
     <div className="mx-auto w-full max-w-lg flex-1 px-4 py-16">
-      <h1 className="mb-6 text-2xl font-bold text-white">Battles</h1>
+      <h1 className="mb-6 text-2xl font-bold text-white">Pitches</h1>
 
       {battles.length === 0 ? (
-        <p className="text-sm text-zinc-500">Noch keine Battles — Herausforderungen annehmen, um eins zu starten.</p>
+        <p className="text-sm text-zinc-500">Noch keine Pitches — nimm eine Einladung an, um einen zu starten.</p>
       ) : (
         <ul className="space-y-3">
           {battles.map((battle) => {
@@ -57,7 +57,7 @@ export default async function BattlesPage() {
             return (
               <li key={battle.id}>
                 <Link
-                  href={`/battles/${battle.id}`}
+                  href={`/pitches/${battle.id}`}
                   className="flex items-center justify-between gap-3 rounded-xl border border-zinc-800 bg-zinc-950 p-4 hover:border-zinc-600"
                 >
                   <div className="flex items-center gap-2">

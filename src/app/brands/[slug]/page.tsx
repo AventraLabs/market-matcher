@@ -15,7 +15,7 @@ import { getExistingOpenBattle } from "@/lib/battle";
 
 // Note: this page already reads the session (getOptionalUser -> auth(),
 // which touches cookies), so Next treats it as dynamic automatically —
-// unlike /brands and /battles, no explicit `dynamic = "force-dynamic"`
+// unlike /brands and /pitches, no explicit `dynamic = "force-dynamic"`
 // is needed here.
 
 const COUNTRY_LABELS: Record<string, string> = {
@@ -96,10 +96,10 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
           <div className="mt-4 text-center">
             {existingOpenBattle ? (
               <Link
-                href={`/battles/${existingOpenBattle.id}`}
+                href={`/pitches/${existingOpenBattle.id}`}
                 className="text-sm text-orange-500 hover:underline"
               >
-                Du hast diese Marke bereits gekontert — Battle ansehen →
+                Du hast auf diese Marke bereits geantwortet — Pitch ansehen →
               </Link>
             ) : (
               <CounterForm targetBrandId={brand.id} />
@@ -112,8 +112,8 @@ export default async function BrandProfilePage({ params }: { params: Promise<{ s
             {livePending ? (
               <p className="mt-6 text-center text-sm text-zinc-400">
                 {livePending.challengerBrandId === viewerBrand.id
-                  ? "Du hast diese Marke bereits herausgefordert — Antwort steht noch aus."
-                  : "Diese Marke hat dich bereits herausgefordert — schau in deinem Profil vorbei."}
+                  ? "Du hast diese Marke bereits eingeladen — Antwort steht noch aus."
+                  : "Diese Marke hat dich bereits eingeladen — schau in deinem Profil vorbei."}
               </p>
             ) : (
               <ChallengeButton challengedBrandId={brand.id} />

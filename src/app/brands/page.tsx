@@ -3,7 +3,7 @@ import { desc } from "drizzle-orm";
 import { db } from "@/db";
 import { brands } from "@/db/schema";
 
-// Always live data — same reasoning as /battles: no dynamic API is used
+// Always live data — same reasoning as /pitches: no dynamic API is used
 // here otherwise, so Next would prerender this once at build time and
 // never show a brand created after the last deploy.
 export const dynamic = "force-dynamic";

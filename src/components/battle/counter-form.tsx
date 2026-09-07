@@ -16,7 +16,7 @@ export function CounterForm({ targetBrandId }: { targetBrandId: string }) {
         onClick={() => setOpen(true)}
         className="rounded-lg border border-orange-500/40 px-4 py-2 text-sm font-semibold text-orange-400 transition-colors hover:bg-orange-500/10"
       >
-        ⚔️ Kontern
+        Antworten
       </button>
     );
   }
@@ -25,7 +25,7 @@ export function CounterForm({ targetBrandId }: { targetBrandId: string }) {
     <form action={action} className="mt-4 rounded-lg border border-zinc-800 p-4">
       <input type="hidden" name="targetBrandId" value={targetBrandId} />
       <p className="mb-3 text-sm text-zinc-400">
-        Lade dein eigenes Video hoch — sobald es hochgeladen ist, entsteht sofort ein Battle und alle können
+        Lade dein eigenes Video hoch — sobald es hochgeladen ist, entsteht sofort ein Pitch und alle können
         abstimmen.
       </p>
       <FormError message={state?.error} />
@@ -38,7 +38,7 @@ export function CounterForm({ targetBrandId }: { targetBrandId: string }) {
         className="mb-3 w-full text-sm text-zinc-300 file:mr-3 file:rounded-lg file:border-0 file:bg-zinc-800 file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-zinc-700"
       />
       <div className="flex gap-2">
-        <SubmitButton>Kontern & Battle starten</SubmitButton>
+        <SubmitButton>Antworten & Pitch starten</SubmitButton>
         <button
           type="button"
           onClick={() => setOpen(false)}

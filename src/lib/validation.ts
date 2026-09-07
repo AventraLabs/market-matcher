@@ -8,10 +8,16 @@ const passwordSchema = z
   .regex(/[a-zA-Z]/, "Mindestens ein Buchstabe.")
   .regex(/[0-9]/, "Mindestens eine Zahl.");
 
+// Phase 8: every account is either an Acro (a brand — posts pitches,
+// invites, replies) or an Assent (watches and votes, never owns a brand).
+// Chosen once at registration; there's no UI to switch later yet.
+export const AccountTypes = ["acro", "assent"] as const;
+
 export const RegisterSchema = z.object({
   name: z.string().trim().min(1, "Name fehlt.").max(100).optional().or(z.literal("")),
   email: z.email("Ungültige E-Mail-Adresse.").trim().toLowerCase(),
   password: passwordSchema,
+  accountType: z.enum(AccountTypes, "Bitte wähle Acro oder Assent."),
 });
 
 export const LoginSchema = z.object({

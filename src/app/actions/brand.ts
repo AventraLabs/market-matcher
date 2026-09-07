@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
-import { brands, brandMembers } from "@/db/schema";
+import { brands, brandMembers, users } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { uploadImage, ALLOWED_IMAGE_TYPES } from "@/lib/storage";
 import { CreateBrandSchema } from "@/lib/validation";
@@ -37,6 +37,16 @@ async function uniqueSlug(name: string): Promise<string> {
 
 export async function createBrand(_prevState: BrandFormState, formData: FormData): Promise<BrandFormState> {
   const user = await requireUser();
+
+  // Phase 8: only Acro accounts can own a brand — Assent accounts watch
+  // and vote, never post. This is the one gate that matters: every other
+  // Acro-only action (invite, reply, upload) already requires a brand via
+  // getBrandForUser, so once brand creation is gated here, everything
+  // downstream is gated for free.
+  const [dbUser] = await db.select({ accountType: users.accountType }).from(users).where(eq(users.id, user.id)).limit(1);
+  if (dbUser?.accountType !== "acro") {
+    return { errors: { _form: ["Nur Acro-Accounts können eine Marke erstellen."] } };
+  }
 
   // One brand per user for Phase 2 — brand_members exists as its own table
   // so lifting this to teams later doesn't need a migration.

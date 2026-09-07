@@ -27,7 +27,7 @@ export async function getUserVote(battleId: string, userId: string): Promise<str
   return row?.votedForBrandId ?? null;
 }
 
-/** Total vote count per battle, for list views (e.g. /battles cards). */
+/** Total vote count per battle, for list views (e.g. /pitches cards). */
 export async function getVoteTotals(battleIds: string[]): Promise<Map<string, number>> {
   if (battleIds.length === 0) return new Map();
   const rows = await db

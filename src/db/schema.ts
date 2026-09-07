@@ -11,6 +11,12 @@ export const users = pgTable(
     email: text("email").notNull(),
     passwordHash: text("password_hash").notNull(),
     name: text("name"),
+    // Phase 8: 'acro' (a brand — posts videos, invites, replies) or
+    // 'assent' (watches and votes, can never own a brand). Chosen once at
+    // registration, not changeable from the UI yet. Existing rows get
+    // backfilled by the migration: anyone already in brand_members becomes
+    // 'acro', everyone else 'assent' — see drizzle/ for the backfill UPDATE.
+    accountType: text("account_type").notNull().default("assent"),
     emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -253,3 +259,23 @@ export const votes = pgTable(
 
 export type Vote = typeof votes.$inferSelect;
 export type NewVote = typeof votes.$inferInsert;
+
+// Phase 8: comments. Flat, TikTok/Reels-style list under a Pitch — no
+// threading/replies-to-comments yet, and no edit/delete UI (a known rough
+// edge, see README). Anyone signed in can comment, including a Pitch's own
+// Acros — this is a discussion thread, not a vote, so there's no
+// self-comment restriction like there is for votes.
+export const comments = pgTable("comments", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  battleId: uuid("battle_id")
+    .notNull()
+    .references(() => battles.id, { onDelete: "cascade" }),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+});
+
+export type Comment = typeof comments.$inferSelect;
+export type NewComment = typeof comments.$inferInsert;
