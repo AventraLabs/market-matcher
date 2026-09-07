@@ -37,12 +37,17 @@ export default async function Home() {
         )}
       </div>
 
-      <Link href="/brands" className="mt-6 text-sm text-orange-500 hover:underline">
-        Marken entdecken →
-      </Link>
+      <div className="mt-6 flex gap-4 text-sm">
+        <Link href="/brands" className="text-orange-500 hover:underline">
+          Marken entdecken →
+        </Link>
+        <Link href="/battles" className="text-orange-500 hover:underline">
+          Battles ansehen →
+        </Link>
+      </div>
 
       <p className="mt-16 text-xs text-zinc-600">
-        Phase 1-4 — Accounts, Marken, Video, Challenges.
+        Phase 1-5 — Accounts, Marken, Video, Challenges, Battle.
       </p>
     </div>
   );

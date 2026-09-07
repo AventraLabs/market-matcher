@@ -16,7 +16,17 @@ const STATUS_CLASS: Record<string, string> = {
   expired: "bg-zinc-800 text-zinc-500",
 };
 
-function StatusBadge({ status }: { status: string }) {
+function StatusBadge({ status, battleId }: { status: string; battleId?: string | null }) {
+  if (status === "accepted" && battleId) {
+    return (
+      <Link
+        href={`/battles/${battleId}`}
+        className="rounded-full bg-orange-500/10 px-2 py-0.5 text-xs font-medium text-orange-400 hover:bg-orange-500/20"
+      >
+        Battle ansehen →
+      </Link>
+    );
+  }
   return (
     <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_CLASS[status]}`}>
       {STATUS_LABEL[status]}
@@ -60,7 +70,7 @@ export function IncomingChallengeList({ challenges }: { challenges: ChallengeWit
                 <p className="mt-1 text-xs text-zinc-500">Noch {hoursLeft(c.expiresAt)}h zum Antworten</p>
               ) : (
                 <div className="mt-1">
-                  <StatusBadge status={status} />
+                  <StatusBadge status={status} battleId={c.battleId} />
                 </div>
               )}
             </div>
@@ -84,7 +94,7 @@ export function OutgoingChallengeList({ challenges }: { challenges: ChallengeWit
           <li key={c.id} className="flex items-center justify-between gap-3 rounded-lg border border-zinc-800 p-3">
             <BrandChip brand={c.otherBrand} />
             <div className="text-right">
-              <StatusBadge status={status} />
+              <StatusBadge status={status} battleId={c.battleId} />
               {status === "pending" && <p className="mt-1 text-xs text-zinc-500">Noch {hoursLeft(c.expiresAt)}h</p>}
             </div>
           </li>

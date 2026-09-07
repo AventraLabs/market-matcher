@@ -3,7 +3,7 @@
 > Werbung wird zum Entertainment.
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
-(video), Phase 4 (challenges).**
+(video), Phase 4 (challenges), Phase 5 (battle).**
 
 **Live:** https://market-matcher-neon.vercel.app
 
@@ -51,8 +51,12 @@ That's enough to test the whole flow solo.
 - **challenges** (Phase 4) — challengerBrandId, challengedBrandId, status
   (pending/accepted/declined/expired), expiresAt (createdAt + 24h), respondedAt,
   timestamps. Partial unique index on (challenger, challenged) WHERE status='pending'.
+- **battles** (Phase 5) — challengeId (unique — one battle per accepted challenge),
+  brandAId, brandBId, status ('active' for now), createdAt. Still uses each brand's
+  `videoUrl` from Phase 3 rather than a separate per-battle submission — that split
+  only matters once a brand needs different content per battle, which isn't yet.
 
-More tables (Battle, Vote, ...) get added in later phases, on top of this.
+More tables (Vote, ...) get added in later phases, on top of this.
 
 ## 3. What's implemented
 
@@ -110,8 +114,22 @@ More tables (Battle, Vote, ...) get added in later phases, on top of this.
   level; the opposite-direction and general "already have a live one" checks are
   application-level (`getLivePendingChallengeBetween`).
 
-Deliberately out of scope so far: the actual battle (content side-by-side) and voting —
-Phase 5 and 6.
+**Phase 5 — battle:**
+
+- Accepting a challenge (`respondToChallenge`) automatically inserts a row in the new
+  `battles` table — a battle is just "this accepted challenge, viewed as a head-to-head
+  page". One battle per challenge (unique index on `challenge_id`).
+- `/battles` — public list of all battles (brand vs. brand).
+- `/battles/[id]` — both brands' showcase videos side by side (9:16 players, stacked on
+  mobile via `sm:flex-row`), reachable logged-out. If a brand hasn't uploaded a video
+  yet, shows a placeholder instead of a broken player.
+- On `/profile`, an accepted challenge's status badge becomes a "Battle ansehen" link
+  straight to its battle page (both `getIncomingChallenges`/`getOutgoingChallenges` now
+  left-join `battles` on `challenge_id` to get this for free).
+- `battles.status` defaults to `'active'` — unused until Phase 6, which is what will
+  flip it to `'finished'` once voting closes.
+
+Deliberately out of scope so far: voting itself (Phase 6) and any ranking/ELO.
 
 ## 4. The two-real-inboxes test
 

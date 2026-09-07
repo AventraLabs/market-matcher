@@ -1,7 +1,7 @@
 import "server-only";
 import { and, desc, eq, or } from "drizzle-orm";
 import { db } from "@/db";
-import { brands, challenges, type Challenge } from "@/db/schema";
+import { battles, brands, challenges, type Challenge } from "@/db/schema";
 
 export const CHALLENGE_WINDOW_MS = 24 * 60 * 60 * 1000; // 24h to accept/decline
 
@@ -23,6 +23,7 @@ export function effectiveStatus(challenge: Pick<Challenge, "status" | "expiresAt
 
 export type ChallengeWithBrand = Challenge & {
   otherBrand: { id: string; name: string; slug: string; logoUrl: string | null };
+  battleId: string | null;
 };
 
 /** Challenges sent TO this brand (it's the one deciding). */
@@ -31,12 +32,14 @@ export async function getIncomingChallenges(brandId: string): Promise<ChallengeW
     .select({
       challenge: challenges,
       otherBrand: { id: brands.id, name: brands.name, slug: brands.slug, logoUrl: brands.logoUrl },
+      battleId: battles.id,
     })
     .from(challenges)
     .innerJoin(brands, eq(challenges.challengerBrandId, brands.id))
+    .leftJoin(battles, eq(battles.challengeId, challenges.id))
     .where(eq(challenges.challengedBrandId, brandId))
     .orderBy(desc(challenges.createdAt));
-  return rows.map((r) => ({ ...r.challenge, otherBrand: r.otherBrand }));
+  return rows.map((r) => ({ ...r.challenge, otherBrand: r.otherBrand, battleId: r.battleId }));
 }
 
 /** Challenges this brand sent out. */
@@ -45,12 +48,14 @@ export async function getOutgoingChallenges(brandId: string): Promise<ChallengeW
     .select({
       challenge: challenges,
       otherBrand: { id: brands.id, name: brands.name, slug: brands.slug, logoUrl: brands.logoUrl },
+      battleId: battles.id,
     })
     .from(challenges)
     .innerJoin(brands, eq(challenges.challengedBrandId, brands.id))
+    .leftJoin(battles, eq(battles.challengeId, challenges.id))
     .where(eq(challenges.challengerBrandId, brandId))
     .orderBy(desc(challenges.createdAt));
-  return rows.map((r) => ({ ...r.challenge, otherBrand: r.otherBrand }));
+  return rows.map((r) => ({ ...r.challenge, otherBrand: r.otherBrand, battleId: r.battleId }));
 }
 
 /**

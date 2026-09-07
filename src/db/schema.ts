@@ -120,3 +120,30 @@ export const challenges = pgTable(
 
 export type Challenge = typeof challenges.$inferSelect;
 export type NewChallenge = typeof challenges.$inferInsert;
+
+// Phase 5: battles. Created automatically the moment a challenge is
+// accepted (see respondToChallenge in src/app/actions/challenge.ts) — a
+// battle is just "this accepted challenge, viewed as a head-to-head page".
+// status stays 'active' through Phase 5; Phase 6 (voting) is what will
+// eventually flip it to 'finished'.
+export const battles = pgTable(
+  "battles",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    challengeId: uuid("challenge_id")
+      .notNull()
+      .references(() => challenges.id, { onDelete: "cascade" }),
+    brandAId: uuid("brand_a_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    brandBId: uuid("brand_b_id")
+      .notNull()
+      .references(() => brands.id, { onDelete: "cascade" }),
+    status: text("status").notNull().default("active"),
+    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [uniqueIndex("battles_challenge_id_unique_idx").on(table.challengeId)],
+);
+
+export type Battle = typeof battles.$inferSelect;
+export type NewBattle = typeof battles.$inferInsert;

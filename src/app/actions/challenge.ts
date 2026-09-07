@@ -3,7 +3,7 @@
 import { eq } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { db } from "@/db";
-import { challenges } from "@/db/schema";
+import { battles, challenges } from "@/db/schema";
 import { requireUser } from "@/lib/session";
 import { getBrandForUser } from "@/lib/brand";
 import { CHALLENGE_WINDOW_MS, effectiveStatus, getLivePendingChallengeBetween } from "@/lib/challenge";
@@ -77,6 +77,16 @@ export async function respondToChallenge(_prevState: RespondFormState, formData:
     .update(challenges)
     .set({ status: decision === "accept" ? "accepted" : "declined", respondedAt: new Date() })
     .where(eq(challenges.id, challengeId));
+
+  // Phase 5: accepting a challenge is what turns it into a battle — the
+  // page that shows both brands' content side by side.
+  if (decision === "accept") {
+    await db.insert(battles).values({
+      challengeId: challenge.id,
+      brandAId: challenge.challengerBrandId,
+      brandBId: challenge.challengedBrandId,
+    });
+  }
 
   refresh();
   return undefined;
