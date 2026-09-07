@@ -78,6 +78,13 @@
       "when": 1788812149265,
       "tag": "0010_mixed_pestilence",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1788816314751,
+      "tag": "0011_thankful_blizzard",
+      "breakpoints": true
     }
   ]
 }

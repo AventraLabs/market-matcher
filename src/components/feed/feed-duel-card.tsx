@@ -11,6 +11,38 @@ function timeLeftLabel(iso: string): string {
   return `${Math.max(1, Math.ceil(hoursLeft))}h`;
 }
 
+function outcomeLabel(sideIndex: 0 | 1, tally: FeedDuel["tally"]): string | null {
+  if (tally.total === 0) return null;
+  if (tally.brandAVotes === tally.brandBVotes) return "Unentschieden";
+  const won = (sideIndex === 0 && tally.brandAVotes > tally.brandBVotes) || (sideIndex === 1 && tally.brandBVotes > tally.brandAVotes);
+  return won ? "🏆 Gewonnen" : "Verloren";
+}
+
+function ResultLine({ sideIndex, tally, prefix }: { sideIndex: 0 | 1; tally: FeedDuel["tally"]; prefix?: string }) {
+  const sideVotes = sideIndex === 0 ? tally.brandAVotes : tally.brandBVotes;
+  const pct = tally.total === 0 ? 0 : Math.round((sideVotes / tally.total) * 100);
+  const outcome = outcomeLabel(sideIndex, tally);
+  return (
+    <p className="text-xs text-zinc-300">
+      {prefix && <span className="text-zinc-500">{prefix} </span>}
+      {outcome && <span className="font-semibold text-orange-400">{outcome} · </span>}
+      {pct}% ({tally.total} {tally.total === 1 ? "Stimme" : "Stimmen"})
+    </p>
+  );
+}
+
+// Phase 12: two things were lost when the Feed replaced the old battle-
+// detail page as the only place to actually vote, both restored here:
+//   1. Before a Pitch is finished, the split never shows — only the running
+//      total ("340 Stimmen bisher") — same "don't create a bandwagon effect"
+//      reasoning as Phase 7's VotePanel, which this component has fully
+//      replaced (that component and its now-orphaned server action were
+//      removed in this phase).
+//   2. Voting doesn't actually stop once a Pitch is "finished" — the
+//      official result freezes at votingEndsAt (`officialTally`), but anyone
+//      who hasn't voted yet can still vote afterwards, and `tally` (the
+//      live, ever-growing count) is shown alongside the frozen one whenever
+//      they've diverged — that's the whole point of not cutting voting off.
 function VoteState({
   duel,
   sideIndex,
@@ -24,58 +56,64 @@ function VoteState({
   onVote: () => void;
   voting: boolean;
 }) {
-  const { tally, isFinished, revealSplit, viewerVotedBrandId, viewerOwnsThisBattle } = duel;
+  const { tally, officialTally, isFinished, viewerVotedBrandId, viewerOwnsThisBattle, votingEndsAt } = duel;
   const side = duel.sides[sideIndex];
 
   if (viewerOwnsThisBattle) {
     return <p className="text-xs text-zinc-400">Das ist dein eigener Pitch</p>;
   }
 
-  if (isFinished && revealSplit) {
-    const sideVotes = sideIndex === 0 ? tally.brandAVotes : tally.brandBVotes;
-    const pct = tally.total === 0 ? 0 : Math.round((sideVotes / tally.total) * 100);
-    const outcome =
-      tally.total === 0
-        ? null
-        : tally.brandAVotes === tally.brandBVotes
-          ? "Unentschieden"
-          : (sideIndex === 0 && tally.brandAVotes > tally.brandBVotes) ||
-              (sideIndex === 1 && tally.brandBVotes > tally.brandAVotes)
-            ? "🏆 Gewonnen"
-            : "Verloren";
+  if (!isLoggedIn) {
     return (
-      <p className="text-xs text-zinc-300">
-        {outcome && <span className="font-semibold text-orange-400">{outcome} · </span>}
-        {pct}% ({tally.total} {tally.total === 1 ? "Stimme" : "Stimmen"})
-      </p>
+      <div className="space-y-1">
+        {tally.total > 0 && <p className="text-xs text-zinc-500">{tally.total} {tally.total === 1 ? "Stimme" : "Stimmen"} bisher</p>}
+        <a href="/login" className="text-xs text-orange-400 hover:underline">
+          Anmelden, um abzustimmen
+        </a>
+      </div>
     );
   }
 
-  if (!isLoggedIn) {
-    return (
-      <a href="/login" className="text-xs text-orange-400 hover:underline">
-        Anmelden, um abzustimmen
-      </a>
-    );
-  }
+  const hasDiverged = isFinished && officialTally && tally.total !== officialTally.total;
+  const officialResult = isFinished && officialTally ? <ResultLine sideIndex={sideIndex} tally={officialTally} prefix="Ergebnis:" /> : null;
+  const liveDrift = hasDiverged ? <ResultLine sideIndex={sideIndex} tally={tally} prefix="🔄 Aktuell:" /> : null;
 
   if (viewerVotedBrandId) {
     const votedForThis = viewerVotedBrandId === side.brandId;
     return (
-      <p className="text-xs text-orange-400">
-        {votedForThis ? "✓ Du hast für diese Seite gestimmt" : "✓ Du hast für die Gegenseite gestimmt"}
-      </p>
+      <div className="space-y-1">
+        <p className="text-xs text-orange-400">
+          {votedForThis ? "✓ Du hast für diese Seite gestimmt" : "✓ Du hast für die Gegenseite gestimmt"}
+        </p>
+        {officialResult ?? (
+          <p className="text-xs text-zinc-500">
+            {tally.total} {tally.total === 1 ? "Stimme" : "Stimmen"} bisher — wer führt, bleibt geheim bis Fristende.
+          </p>
+        )}
+        {liveDrift}
+      </div>
     );
   }
 
   return (
-    <button
-      onClick={onVote}
-      disabled={voting}
-      className="rounded-full bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
-    >
-      {voting ? "…" : `🏆 Für ${side.brandName} stimmen`}
-    </button>
+    <div className="space-y-1.5">
+      {officialResult}
+      {liveDrift}
+      {isFinished && <p className="text-xs text-zinc-500">Die Frist ist zwar um, du kannst aber trotzdem noch abstimmen:</p>}
+      <button
+        onClick={onVote}
+        disabled={voting}
+        className="rounded-full bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white transition-colors hover:bg-orange-500 disabled:opacity-50"
+      >
+        {voting ? "…" : `🏆 Für ${side.brandName} stimmen`}
+      </button>
+      {!isFinished && (
+        <p className="text-xs text-zinc-500">
+          {tally.total > 0 ? `${tally.total} ${tally.total === 1 ? "Stimme" : "Stimmen"} bisher · ` : ""}
+          wer führt, bleibt geheim bis {votingEndsAt ? new Date(votingEndsAt).toLocaleDateString("de-DE") : "Fristende"}
+        </p>
+      )}
+    </div>
   );
 }
 

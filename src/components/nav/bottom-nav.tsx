@@ -27,7 +27,7 @@ export function BottomNav({ isLoggedIn, unreadCount = 0 }: { isLoggedIn: boolean
         const showBadge = tab === notificationsTab && isLoggedIn && unreadCount > 0;
         return (
           <Link
-            key={tab.href}
+            key={tab.label}
             href={tab.href}
             className={`relative flex flex-1 flex-col items-center gap-0.5 py-2.5 text-xs font-medium ${
               active ? "text-orange-500" : "text-zinc-400"

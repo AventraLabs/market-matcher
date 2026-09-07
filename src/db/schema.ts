@@ -187,6 +187,13 @@ export const battles = pgTable(
     productionDeadline: timestamp("production_deadline", { withTimezone: true }),
     votingEndsAt: timestamp("voting_ends_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    // Phase 12: set the first time the "result is in" push notification has
+    // been sent to this battle's voters — see finalizeAndNotifyBattle() in
+    // src/lib/battle-notify.ts. Doubles as the concurrency guard: the update
+    // that sets this column is conditioned on it still being NULL, so if two
+    // requests race to finalize the same battle (plausible — this fires from
+    // ordinary feed reads, not a cron job), only one actually sends pushes.
+    resultNotifiedAt: timestamp("result_notified_at", { withTimezone: true }),
   },
   (table) => [uniqueIndex("battles_challenge_id_unique_idx").on(table.challengeId)],
 );
@@ -331,3 +338,24 @@ export const battleReminders = pgTable(
 
 export type BattleReminder = typeof battleReminders.$inferSelect;
 export type NewBattleReminder = typeof battleReminders.$inferInsert;
+
+// Phase 12: web push subscriptions. One row per browser/device a user has
+// granted notification permission on (a user can have several — phone +
+// laptop). `endpoint` is unique per browser subscription and doubles as the
+// natural upsert key (re-subscribing the same browser replaces its keys
+// rather than duplicating the row). Used today specifically to tell a voter
+// the moment their Pitch's result is in — see src/lib/battle-notify.ts — not
+// yet a general notification-preferences system.
+export const pushSubscriptions = pgTable("push_subscriptions", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  userId: uuid("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+  endpoint: text("endpoint").notNull(),
+  p256dh: text("p256dh").notNull(),
+  auth: text("auth").notNull(),
+  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+}, (table) => [uniqueIndex("push_subscriptions_endpoint_unique_idx").on(table.endpoint)]);
+
+export type PushSubscription = typeof pushSubscriptions.$inferSelect;
+export type NewPushSubscription = typeof pushSubscriptions.$inferInsert;

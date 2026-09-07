@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedDuel, FeedPage } from "@/lib/feed";
 import { FeedDuelCard } from "@/components/feed/feed-duel-card";
 import { CommentSheet } from "@/components/feed/comment-sheet";
+import { PushOptIn } from "@/components/feed/push-opt-in";
+import { getNotificationPermission } from "@/lib/push-client";
 
 type Tab = "foryou" | "following";
 
@@ -25,6 +27,7 @@ export function FeedClient({
   const [requiresLogin, setRequiresLogin] = useState(false);
   const [muted, setMuted] = useState(true);
   const [commentSheetBattleId, setCommentSheetBattleId] = useState<string | null>(null);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
 
@@ -137,10 +140,25 @@ export function FeedClient({
       const data = await res.json();
       if (res.ok && data.tally) {
         patchDuel(duel.key, { tally: data.tally, viewerVotedBrandId: data.votedForBrandId });
+        maybeOfferPushPrompt();
       }
     } catch {
       // Silent — the button just stays clickable, no state changed.
     }
+  }
+
+  // Phase 12: offer the push opt-in exactly once, right after a viewer's
+  // first vote — the moment "tell me when this is decided" is obviously
+  // relevant. `mm_push_prompted` (localStorage) makes it a one-time offer
+  // even across sessions, whatever they answered.
+  function maybeOfferPushPrompt() {
+    if (getNotificationPermission() !== "default") return;
+    try {
+      if (localStorage.getItem("mm_push_prompted")) return;
+    } catch {
+      return; // can't remember the answer reliably — safer to just not ask
+    }
+    setShowPushPrompt(true);
   }
 
   function handleShare(duel: FeedDuel) {
@@ -239,6 +257,8 @@ export function FeedClient({
           onCommentPosted={handleCommentPosted}
         />
       )}
+
+      {showPushPrompt && <PushOptIn onDone={() => setShowPushPrompt(false)} />}
     </div>
   );
 }

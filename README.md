@@ -4,7 +4,10 @@
 
 Built phase by phase. **Done so far: Phase 1 (accounts), Phase 2 (brands), Phase 3
 (video), Phase 4 (challenges), Phase 5 (battle + follow/notify refinements), Phase 6
-(voting), Phase 7 (per-battle video, hidden results, open counters).**
+(voting), Phase 7 (per-battle video, hidden results, open counters), Phase 8
+(Acro/Assent roles, Pitch vocabulary, comments), Phase 9/9.1 (TikTok-style Feed),
+Phase 10 (Pitches as preview, real notifications screen), Phase 11 (demo content,
+nav bugfix), Phase 12 (frozen result + continued voting + push notifications).**
 
 **Live:** https://market-matcher-neon.vercel.app
 
@@ -459,6 +462,121 @@ follow-up idea:
   Feed's own pagination — the user's call was that a fizzled (walkover/no-show) or
   finished Duell not showing up anywhere public isn't a loss, since it was never real
   content to browse.
+
+**Phase 11 — demo content, and an independent product/tech review:**
+
+A fresh session picked this up cold, read the original master prompt (the 36-section
+vision doc — ELO ratings, tournaments, brand verification, anti-manipulation, monetization
+— all deliberately out of scope for the MVP per that same doc's own §24/§35) plus this
+README, then actually opened the live Vercel deployment. Finding: the live feed only had
+the leftover QA rows from manual Phase 7 testing ("Live P7 A", "P7 Counter Live") — no
+real or even fictional content. That fails the master prompt's own North Star test
+(§36 — "würde jemand das heute Abend öffnen, nur um zu sehen was gerade battelt?") outright:
+there was nothing to see. Since real brand signups take outreach this session can't do,
+the fix that's actually buildable right now is realistic *fictional* demo content (the
+master prompt's own §30 asked for this from day one and it was never done).
+
+- **`scripts/generate-demo-videos.sh`** — generates 16 short vertical (540×960, 15s,
+  ~50-100KB each) placeholder pitch videos with ffmpeg (colored background + brand
+  name/tagline via `drawtext`), committed under `public/demo/videos/`. Deliberately not
+  real brand logos/footage (the master prompt explicitly warns against using real brand
+  assets without rights) and not real company names either — Coca-Cola/Pepsi/Nike/Adidas
+  in the master prompt were illustrative of the *concept*, not a literal instruction to
+  depict real, trademarked companies "losing" a vote. Served as static files (Next.js
+  serves anything under `public/` automatically on Vercel) — no Supabase Storage
+  credentials needed for demo content specifically.
+- **`src/db/seed-demo.ts`** (`npm run db:seed-demo`) — 16 fictional brands across 8
+  categories (Food, Fashion, Beauty, Tech, Automotive, Gaming — matching the master
+  prompt's category list), each an explicit Goliath-vs-David pair, and 18 battles across
+  every real stage: finished (blowouts, a giant-killer upset, a 50.2/49.8 nail-biter),
+  live with real vote counts and days-left countdowns, and `awaiting_videos` (both sides
+  missing, or just one) so `/pitches` has real content too. Plus 150 synthetic viewer
+  accounts casting the votes/likes/comments, and follow counts weighted so Goliaths have
+  visibly more followers than Davids. Fully namespaced (`@marketmatcher.demo` emails, a
+  fixed list of brand slugs) so re-running it is always safe: it wipes and recreates only
+  its own rows, in prod or in dev, never touching a real account. Demo accounts share one
+  password (printed by the script) so the user can log in as any demo brand to test the
+  Acro-side UI without creating a real account.
+- **Bugfix found during this review's own testing, unrelated to the above:**
+  `BottomNav` used `href` as the React list key. Logged out, the 🔔 "Erinnerungen" tab and
+  👤 "Anmelden" tab both point at `/login`, so React saw a duplicate key and warned in the
+  console (harmless today, but exactly the kind of thing that silently drops/duplicates a
+  tab on a future React version). Fixed by keying on `label` instead, which is always
+  unique across the five tabs.
+- **Deliberately out of scope for this phase** (flagged for the next ones, prioritized by
+  impact on "opens the app every 10 minutes"): web push notifications — in-app-only
+  notifications can't drive a return-to-app habit, since nothing tells you to look; a
+  brand win/loss record + rivalry history shown on `/brands/[slug]` (the underlying vote
+  data already supports this, it just isn't surfaced — a near-free win); dynamic
+  share cards/OG images per Pitch (today's share is a bare link — the master prompt's
+  §21 "a $2M startup is destroying a $40B company" hook needs an actual generated
+  image+headline to work as a share card); the 15-second constraint isn't enforced
+  anywhere technically (any video length uploads fine).
+
+**Phase 12 — result freezes at the deadline, voting never actually stops, push
+notifications when a result is in:**
+
+Direct product feedback, same session as Phase 11: the Feed's rebuild (Phase 9) had
+silently dropped Phase 7's "show the running vote count, never the split, until voting
+closes" behavior — after voting, `VoteState` just said "✓ du hast abgestimmt" and nothing
+else, no FOMO/social-proof count, because `VotePanel` (the component that actually had
+this) had quietly become dead code once Phase 10 made the Feed the only place a live
+Pitch is ever watched. Also requested: notify a voter automatically the moment their
+Pitch's result is decided, and — since a real David-vs-Goliath story can keep playing out
+after the "official" moment — let voting continue indefinitely instead of hard-closing it,
+while still freezing an official result at the deadline so "who actually won" stays a fixed
+fact.
+
+- **`VotePanel` and its orphaned server action (`src/app/actions/vote.ts`) are
+  deleted** — fully unreachable since Phase 10, and keeping unreachable code that *looks*
+  like the current vote UI around is exactly how a regression like the one above happens
+  again. `FeedDuelCard`'s `VoteState` (`src/components/feed/feed-duel-card.tsx`) is now the
+  one implementation of "hide the split, show the count."
+- **Two tallies, not one** (`src/lib/vote.ts`): `getVoteTally()` (existing) is now
+  explicitly the *live*, ever-growing count; a new `getVoteTallyAsOf(battleId, ..., asOf)`
+  reproduces the tally as it stood at any timestamp — used with `votingEndsAt` to compute
+  the *official*, frozen result. `castVoteForUser` never had a deadline check to begin
+  with, so no change was needed there to let voting continue — the gap was purely that the
+  UI stopped offering a vote button once a Pitch was finished, and that `getBattleStage`'s
+  winner was being computed from the live tally, which would have let it silently flip if
+  anyone voted after the deadline. Both fixed: the winner shown as "finished" is always
+  computed from the frozen tally now (`src/lib/feed.ts`), and the vote button stays
+  available to anyone who hasn't voted, finished or not.
+- **The Feed shows both.** Before a Pitch finishes: just the running total, never the
+  split (Phase 7's original reasoning — showing who's ahead risks a bandwagon effect).
+  Once finished: the frozen "Ergebnis" always shows; a second "🔄 Aktuell" line only
+  appears once the live tally has actually diverged from it (someone voted after the
+  deadline) — so a Pitch quietly sitting at its frozen result looks exactly like before,
+  and only the ones where the story keeps moving show the extra line. Tested end-to-end
+  with two fresh accounts voting on opposite sides of an already-"finished" demo Pitch —
+  screenshots confirmed both the frozen result and the diverging live count render
+  correctly on each side.
+- **Web push** (`web-push` package; `NEXT_PUBLIC_VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` /
+  `VAPID_SUBJECT` env vars — a keypair this app generated for itself, not a third-party
+  credential): `public/sw.js` is a minimal service worker (show notification, focus/open
+  the app on click); `src/lib/push-client.ts` registers it and subscribes; a new
+  `push_subscriptions` table (migration `0011`) stores one row per browser a user's
+  granted permission on; `POST /api/push/subscribe` saves it. The opt-in
+  (`src/components/feed/push-opt-in.tsx`) appears exactly once, right after a viewer's
+  *first* vote in a session — the one moment "tell me when this is decided" is obviously
+  useful — and never nags again regardless of the answer (`localStorage`).
+- **No cron job.** There's no scheduled task anywhere in this app (matches
+  `battle-stage.ts`'s existing "compute everything at read time" philosophy) — a Vercel
+  Hobby-plan cron is limited to once a day anyway, which would make "the moment the result
+  is in" a lie. Instead, `src/lib/feed.ts`'s `buildFeedDuels` (the function every feed load
+  already calls) uses `after()` (`next/server`, confirmed present in this Next.js 16 build
+  — see `node_modules/next/dist/server/after/`) to schedule `finalizeAndNotifyBattle()`
+  (`src/lib/battle-notify.ts`) right after the response is sent, for any battle that just
+  turned out finished-and-voted with `battles.result_notified_at` still `NULL`. That column
+  doubles as the concurrency guard — the `UPDATE ... WHERE result_notified_at IS NULL` only
+  succeeds once even if several requests race to finalize the same battle, so pushes never
+  go out twice. On a platform whose whole premise is people checking back every few
+  minutes, this fires close to real-time in practice, for free, on any Vercel plan.
+- **Not done yet, flagged for later:** an unsubscribe/manage-notifications UI (today,
+  denying the browser permission prompt is the only way out); notifications for anything
+  other than "your voted Pitch has a result" (a new challenge, a live-follower alert, etc.
+  still in-app-only); re-prompting a viewer who dismissed the opt-in but later changes
+  their mind (they'd have to be offered it again some other way — no UI for that yet).
 
 ## 4. The two-real-inboxes test
 

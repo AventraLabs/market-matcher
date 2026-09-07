@@ -1,12 +1,14 @@
 import "server-only";
+import { after } from "next/server";
 import { getAllBattles, resolveBattleVideos } from "@/lib/battle";
 import { getBattleStage } from "@/lib/battle-stage";
-import { getVoteTally, getUserVote, type VoteTally } from "@/lib/vote";
+import { getVoteTally, getVoteTallyAsOf, getUserVote, type VoteTally } from "@/lib/vote";
 import { getLikeCounts, getUserLikedKeys } from "@/lib/like";
 import { getCommentCounts } from "@/lib/comment";
 import { getFollowedBrandIds } from "@/lib/follow";
 import { getBrandForUser } from "@/lib/brand";
 import { VOTING_WINDOW_MS } from "@/lib/battle-format";
+import { finalizeAndNotifyBattle } from "@/lib/battle-notify";
 
 // Phase 9.1 — one feed entry per Duell (battle), not per side.
 //
@@ -41,7 +43,15 @@ export type FeedDuel = {
   isFinished: boolean;
   votingEndsAt: string | null; // ISO
   revealSplit: boolean;
+  /** Live, ever-growing tally — includes votes cast after votingEndsAt too. Drives the running "N Stimmen bisher" count and trending score. */
   tally: VoteTally;
+  /**
+   * Phase 12: the tally as it stood at votingEndsAt — this is the "official"
+   * result once a Pitch is finished, and it never changes afterwards. Null
+   * until the Pitch is actually finished. Compare against `tally` to see
+   * whether later votes have since shifted the lead.
+   */
+  officialTally: VoteTally | null;
   commentCount: number;
   viewerVotedBrandId: string | null;
   /** Viewer's own brand is either side of this Duell — can't vote, no follow button on either side. */
@@ -78,9 +88,18 @@ async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
     { battleId: b.id, brandId: b.brandBId },
   ]);
 
-  const [tallies, commentCounts, likeCounts, viewerLikedKeys, viewerVotes, viewerBrand, followedBrandIds] =
+  const [tallies, officialTallies, commentCounts, likeCounts, viewerLikedKeys, viewerVotes, viewerBrand, followedBrandIds] =
     await Promise.all([
       Promise.all(eligible.map((b) => getVoteTally(b.id, b.brandAId, b.brandBId))),
+      // Phase 12: the frozen result at votingEndsAt — null for a battle
+      // that's still in its voting window (nothing to freeze yet).
+      Promise.all(
+        eligible.map((b) =>
+          b.votingEndsAt && b.votingEndsAt.getTime() < Date.now()
+            ? getVoteTallyAsOf(b.id, b.brandAId, b.brandBId, b.votingEndsAt)
+            : Promise.resolve(null),
+        ),
+      ),
       getCommentCounts(battleIds),
       getLikeCounts(likeKeys),
       viewerId ? getUserLikedKeys(viewerId, likeKeys) : Promise.resolve(new Set<string>()),
@@ -90,6 +109,7 @@ async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
     ]);
 
   const talliesByBattle = new Map(eligible.map((b, i) => [b.id, tallies[i]]));
+  const officialTalliesByBattle = new Map(eligible.map((b, i) => [b.id, officialTallies[i]]));
   const viewerVoteByBattle = new Map(eligible.map((b, i) => [b.id, viewerVotes[i] ?? null]));
   const followedSet = new Set(followedBrandIds);
 
@@ -98,6 +118,10 @@ async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
     const { videoUrlA, videoUrlB } = resolveBattleVideos(battle);
     if (!videoUrlA || !videoUrlB) continue; // guaranteed by the eligibility filter, kept for type-narrowing
     const tally = talliesByBattle.get(battle.id)!;
+    const officialTally = officialTalliesByBattle.get(battle.id) ?? null;
+    // The winner is decided from the frozen result, not the live one —
+    // votes cast after votingEndsAt count towards `tally` (shown as "the
+    // current trend") but must never flip who officially won.
     const stage = getBattleStage(
       {
         brandAId: battle.brandAId,
@@ -107,9 +131,16 @@ async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
         productionDeadline: battle.productionDeadline,
         votingEndsAt: battle.votingEndsAt,
       },
-      tally,
+      officialTally ?? tally,
     );
     const isFinished = stage.stage === "finished";
+    if (isFinished && !battle.resultNotifiedAt) {
+      // Fire-and-forget, scheduled to run after this response is sent
+      // (next/server's after()) — see battle-notify.ts for why this piggy-
+      // backs on ordinary feed reads instead of a cron job. Guarded by
+      // resultNotifiedAt so this only actually does work once per battle.
+      after(() => finalizeAndNotifyBattle(battle.id).catch((err) => console.error("[battle-notify]", err)));
+    }
     const activatedAt = battle.votingEndsAt
       ? new Date(battle.votingEndsAt.getTime() - VOTING_WINDOW_MS)
       : battle.createdAt;
@@ -146,6 +177,7 @@ async function buildFeedDuels(viewerId: string | null): Promise<FeedDuel[]> {
       votingEndsAt: battle.votingEndsAt ? battle.votingEndsAt.toISOString() : null,
       revealSplit: isFinished,
       tally,
+      officialTally,
       commentCount,
       viewerVotedBrandId,
       viewerOwnsThisBattle,
