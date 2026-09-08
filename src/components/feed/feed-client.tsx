@@ -4,8 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { FeedDuel, FeedPage } from "@/lib/feed";
 import { FeedDuelCard } from "@/components/feed/feed-duel-card";
 import { CommentSheet } from "@/components/feed/comment-sheet";
-import { PushOptIn } from "@/components/feed/push-opt-in";
-import { getNotificationPermission } from "@/lib/push-client";
+import { getNotificationPermission, subscribeToPush } from "@/lib/push-client";
 
 type Tab = "foryou" | "following";
 
@@ -27,7 +26,6 @@ export function FeedClient({
   const [requiresLogin, setRequiresLogin] = useState(false);
   const [muted, setMuted] = useState(true);
   const [commentSheetBattleId, setCommentSheetBattleId] = useState<string | null>(null);
-  const [showPushPrompt, setShowPushPrompt] = useState(false);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const loadingRef = useRef(false);
 
@@ -147,18 +145,25 @@ export function FeedClient({
     }
   }
 
-  // Phase 12: offer the push opt-in exactly once, right after a viewer's
-  // first vote — the moment "tell me when this is decided" is obviously
-  // relevant. `mm_push_prompted` (localStorage) makes it a one-time offer
-  // even across sessions, whatever they answered.
+  // Phase 12d: no custom "möchtest du Benachrichtigungen?" question of our
+  // own — the point of push is that voting is the only thing a viewer has
+  // to do, the result finds them. We go straight for subscribeToPush(),
+  // which itself triggers the browser's own native permission dialog; that
+  // one dialog is unavoidable (no site can silently enable push — it's a
+  // hard browser security boundary, not a product choice), but it's the
+  // *only* prompt now, fired the moment it's obviously relevant: right
+  // after a viewer's first vote. `mm_push_prompted` (localStorage) makes
+  // this a one-time attempt even across sessions, whatever the browser's
+  // dialog resolves to.
   function maybeOfferPushPrompt() {
-    if (getNotificationPermission() !== "default") return;
+    if (getNotificationPermission() !== "default") return; // already decided (granted/denied) or unsupported — nothing to do
     try {
       if (localStorage.getItem("mm_push_prompted")) return;
+      localStorage.setItem("mm_push_prompted", "1");
     } catch {
-      return; // can't remember the answer reliably — safer to just not ask
+      return; // can't remember the attempt reliably — safer to just not ask
     }
-    setShowPushPrompt(true);
+    void subscribeToPush();
   }
 
   function handleShare(duel: FeedDuel) {
@@ -257,8 +262,6 @@ export function FeedClient({
           onCommentPosted={handleCommentPosted}
         />
       )}
-
-      {showPushPrompt && <PushOptIn onDone={() => setShowPushPrompt(false)} />}
     </div>
   );
 }
